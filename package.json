@@ -1,0 +1,518 @@
+{
+  "name": "exploring-collections",
+  "displayName": "%extension.displayName%",
+  "description": "%extension.description%",
+  "version": "1.0.0",
+  "publisher": "dimanrus",
+  "license": "MIT",
+  "author": {
+    "name": "dimanrus"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dimanrus/exploring-collections-vscode.git"
+  },
+  "homepage": "https://github.com/dimanrus/exploring-collections-vscode#readme",
+  "bugs": {
+    "url": "https://github.com/dimanrus/exploring-collections-vscode/issues"
+  },
+  "icon": "resources/icon.png",
+  "extensionKind": [
+    "workspace"
+  ],
+  "galleryBanner": {
+    "color": "#12141f",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.105.0"
+  },
+  "categories": [
+    "Debuggers",
+    "Visualization",
+    "Data Science",
+    "Other"
+  ],
+  "keywords": [
+    "debug",
+    "debugger",
+    "collection",
+    "collections",
+    "viewer",
+    "visualizer",
+    "table",
+    "datatable",
+    "dataset",
+    "dataframe",
+    "dictionary",
+    "enumerable",
+    "linq",
+    "filter",
+    "export",
+    "chart",
+    "csv",
+    "json",
+    "excel",
+    "xml",
+    "pandas",
+    "csharp",
+    "dotnet",
+    "fsharp",
+    "javascript",
+    "typescript",
+    "python",
+    "go",
+    "rust",
+    "cpp"
+  ],
+  "main": "./dist/extension.js",
+  "l10n": "./l10n",
+  "activationEvents": [
+    "onDebug"
+  ],
+  "capabilities": {
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "%capabilities.virtualWorkspaces.description%"
+    },
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "%capabilities.untrustedWorkspaces.description%"
+    }
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "exploringCollections.explore",
+        "title": "%command.explore.title%",
+        "category": "%command.category%",
+        "icon": "$(table)"
+      },
+      {
+        "command": "exploringCollections.exploreWatch",
+        "title": "%command.exploreWatch.title%",
+        "category": "%command.category%",
+        "icon": "$(table)"
+      },
+      {
+        "command": "exploringCollections.exploreConsole",
+        "title": "%command.exploreConsole.title%",
+        "category": "%command.category%",
+        "icon": "$(table)"
+      },
+      {
+        "command": "exploringCollections.pickAndExplore",
+        "title": "%command.pickAndExplore.title%",
+        "category": "%command.category%",
+        "icon": "$(table)"
+      },
+      {
+        "command": "exploringCollections.refresh",
+        "title": "%command.refresh.title%",
+        "category": "%command.category%",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "exploringCollections.toggleMaximize",
+        "title": "%command.toggleMaximize.title%",
+        "category": "%extension.displayName%",
+        "icon": "$(screen-full)"
+      },
+      {
+        "command": "exploringCollections.export",
+        "title": "%command.export.title%",
+        "category": "%command.category%",
+        "icon": "$(export)"
+      },
+      {
+        "command": "exploringCollections.showChart",
+        "title": "%command.showChart.title%",
+        "category": "%command.category%",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "exploringCollections.previewLiteral",
+        "title": "%command.previewLiteral.title%",
+        "category": "%command.category%",
+        "icon": "$(table)"
+      },
+      {
+        "command": "exploringCollections.copyRows",
+        "title": "%command.copyRows.title%",
+        "category": "%command.category%",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "exploringCollections.pinSnapshot",
+        "title": "%command.pinSnapshot.title%",
+        "category": "%command.category%",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "exploringCollections.removeSnapshot",
+        "title": "%command.removeSnapshot.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "exploringCollections.openSnapshot",
+        "title": "%command.openSnapshot.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "exploringCollections.showOutput",
+        "title": "%command.showOutput.title%",
+        "category": "%command.category%",
+        "icon": "$(output)"
+      },
+      {
+        "command": "exploringCollections.showDiagnostics",
+        "title": "%command.showDiagnostics.title%",
+        "category": "%command.category%"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "exploringCollections.explore",
+        "key": "ctrl+alt+e",
+        "mac": "cmd+alt+e",
+        "when": "inDebugMode"
+      },
+      {
+        "command": "exploringCollections.pickAndExplore",
+        "key": "ctrl+alt+shift+e",
+        "mac": "cmd+alt+shift+e",
+        "when": "inDebugMode"
+      },
+      {
+        "command": "exploringCollections.refresh",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r",
+        "when": "inDebugMode"
+      }
+    ],
+    "menus": {
+      "debug/variables/context": [
+        {
+          "command": "exploringCollections.explore",
+          "when": "debugType in exploringCollections.supportedDebugTypes",
+          "group": "exploringCollections@1"
+        },
+        {
+          "command": "exploringCollections.copyRows",
+          "when": "debugType in exploringCollections.supportedDebugTypes",
+          "group": "exploringCollections@2"
+        }
+      ],
+      "debug/watch/context": [
+        {
+          "command": "exploringCollections.exploreWatch",
+          "when": "debugType in exploringCollections.supportedDebugTypes",
+          "group": "exploringCollections@1"
+        }
+      ],
+      "debug/callstack/context": [
+        {
+          "command": "exploringCollections.exploreConsole",
+          "when": "inDebugMode",
+          "group": "exploringCollections@1"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "exploringCollections.exploreConsole",
+          "when": "inDebugMode",
+          "group": "exploringCollections@1"
+        },
+        {
+          "command": "exploringCollections.previewLiteral",
+          "when": "exploringCollections.supportsDesignTimePreview",
+          "group": "exploringCollections@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "exploringCollections.copyRows",
+          "when": "exploringCollections.hasSnapshot || inDebugMode"
+        },
+        {
+          "command": "exploringCollections.explore",
+          "when": "inDebugMode"
+        },
+        {
+          "command": "exploringCollections.exploreConsole",
+          "when": "inDebugMode"
+        },
+        {
+          "command": "exploringCollections.exploreWatch",
+          "when": "inDebugMode"
+        },
+        {
+          "command": "exploringCollections.export",
+          "when": "exploringCollections.hasSnapshot"
+        },
+        {
+          "command": "exploringCollections.pinSnapshot",
+          "when": "exploringCollections.hasSnapshot"
+        },
+        {
+          "command": "exploringCollections.previewLiteral",
+          "when": "exploringCollections.supportsDesignTimePreview"
+        },
+        {
+          "command": "exploringCollections.refresh"
+        },
+        {
+          "command": "exploringCollections.removeSnapshot",
+          "when": "view == exploringCollections.explorer"
+        },
+        {
+          "command": "exploringCollections.showChart",
+          "when": "exploringCollections.hasSnapshot"
+        },
+        {
+          "command": "exploringCollections.toggleMaximize",
+          "when": "activeWebviewPanelId == exploringCollections.view"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "exploringCollections.showOutput",
+          "when": "view == exploringCollections.explorer",
+          "group": "navigation@1"
+        },
+        {
+          "command": "exploringCollections.showDiagnostics",
+          "when": "view == exploringCollections.explorer",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "exploringCollections.openSnapshot",
+          "when": "view == exploringCollections.explorer && viewItem =~ /^exploringCollections.snapshot/",
+          "group": "inline@1"
+        },
+        {
+          "command": "exploringCollections.removeSnapshot",
+          "when": "view == exploringCollections.explorer && viewItem =~ /^exploringCollections.snapshot/",
+          "group": "inline@2"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "exploringCollections.toggleMaximize",
+          "when": "activeWebviewPanelId == exploringCollections.view && !editorPartMaximizedEditorGroup",
+          "group": "navigation@1"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "exploringCollections",
+          "title": "%viewContainer.title%",
+          "icon": "resources/activitybar.svg"
+        }
+      ]
+    },
+    "views": {
+      "exploringCollections": [
+        {
+          "id": "exploringCollections.explorer",
+          "name": "%view.explorer.name%",
+          "contextualTitle": "%viewContainer.title%",
+          "icon": "resources/activitybar.svg"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "exploringCollections.explorer",
+        "contents": "%view.explorer.welcome%"
+      }
+    ],
+    "configuration": {
+      "title": "%configuration.title%",
+      "properties": {
+        "exploringCollections.maxRows": {
+          "type": "number",
+          "default": 10000,
+          "minimum": 1,
+          "maximum": 2000000,
+          "markdownDescription": "%configuration.maxRows.description%"
+        },
+        "exploringCollections.captureBudgetMs": {
+          "type": "number",
+          "default": 30000,
+          "minimum": 1000,
+          "maximum": 600000,
+          "markdownDescription": "%configuration.captureBudgetMs.description%"
+        },
+        "exploringCollections.pageSize": {
+          "type": "number",
+          "default": 100,
+          "enum": [
+            25,
+            50,
+            100,
+            250,
+            500,
+            1000,
+            5000
+          ],
+          "markdownDescription": "%configuration.pageSize.description%"
+        },
+        "exploringCollections.maxDepth": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 10,
+          "markdownDescription": "%configuration.maxDepth.description%"
+        },
+        "exploringCollections.fetchConcurrency": {
+          "type": "number",
+          "default": 8,
+          "minimum": 1,
+          "maximum": 64,
+          "markdownDescription": "%configuration.fetchConcurrency.description%"
+        },
+        "exploringCollections.timeoutMs": {
+          "type": "number",
+          "default": 20000,
+          "minimum": 1000,
+          "maximum": 600000,
+          "markdownDescription": "%configuration.timeoutMs.description%"
+        },
+        "exploringCollections.enableLanguageHelpers": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%configuration.enableLanguageHelpers.description%"
+        },
+        "exploringCollections.enableFilterPushdown": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%configuration.enableFilterPushdown.description%"
+        },
+        "exploringCollections.enableCharts": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%configuration.enableCharts.description%"
+        },
+        "exploringCollections.showInlineHints": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%configuration.showInlineHints.description%"
+        },
+        "exploringCollections.showCodeLens": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%configuration.showCodeLens.description%"
+        },
+        "exploringCollections.showDesignTimePreview": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%configuration.showDesignTimePreview.description%"
+        },
+        "exploringCollections.showHoverLinks": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%configuration.showHoverLinks.description%"
+        },
+        "exploringCollections.dateFormat": {
+          "type": "string",
+          "default": "iso",
+          "enum": [
+            "iso",
+            "locale",
+            "raw"
+          ],
+          "markdownDescription": "%configuration.dateFormat.description%"
+        },
+        "exploringCollections.columnOrder": {
+          "type": "string",
+          "default": "alphabetical",
+          "enum": [
+            "alphabetical",
+            "discovery"
+          ],
+          "markdownDescription": "%configuration.columnOrder.description%"
+        },
+        "exploringCollections.defaultExportFormat": {
+          "type": "string",
+          "default": "csv",
+          "enum": [
+            "csv",
+            "json",
+            "xlsx",
+            "xml"
+          ],
+          "markdownDescription": "%configuration.defaultExportFormat.description%"
+        },
+        "exploringCollections.exportDirectory": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%configuration.exportDirectory.description%"
+        },
+        "exploringCollections.openExportedFile": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%configuration.openExportedFile.description%"
+        },
+        "exploringCollections.dictionariesAsRows": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%configuration.dictionariesAsRows.description%"
+        },
+        "exploringCollections.customDebugTypes": {
+          "type": "object",
+          "default": {},
+          "markdownDescription": "%configuration.customDebugTypes.description%"
+        },
+        "exploringCollections.excludedMembers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "Capacity",
+            "Count",
+            "Length",
+            "LongLength",
+            "_count",
+            "__len__"
+          ],
+          "markdownDescription": "%configuration.excludedMembers.description%"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true});require('node:fs').rmSync('out',{recursive:true,force:true})\"",
+    "check": "tsc -p ./ --noEmit",
+    "build": "node esbuild.mjs",
+    "build:prod": "node esbuild.mjs --production",
+    "watch": "node esbuild.mjs --watch",
+    "build:tests": "node esbuild.mjs --tests",
+    "test": "npm run test:unit && npm run test:helpers",
+    "vscode:prepublish": "npm run build:prod",
+    "package": "npm run build:prod && vsce package --no-dependencies --allow-missing-repository",
+    "package:openvsx": "npm run build:prod && npx ovsx publish --no-dependencies",
+    "l10n": "node scripts/generate-l10n.mjs",
+    "icon": "python3 scripts/generate-icon.py",
+    "preview": "npm run build && node scripts/render-preview.mjs",
+    "build:helper:dotnet": "dotnet build helpers/dotnet/ExploringCollections.Helper.csproj -c Release",
+    "test:helpers": "node scripts/test-helpers.mjs",
+    "build:integration": "node esbuild.mjs --integration",
+    "test:integration": "npm run build && npm run build:integration && node scripts/run-integration.mjs",
+    "test:unit": "npm run build && npm run build:tests && node --test \"out/test/**/*.test.js\""
+  },
+  "devDependencies": {
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^26.6.5",
+    "@types/vscode": "1.105.0",
+    "@vscode/vsce": "^4.0.0",
+    "esbuild": "^0.28.2",
+    "jsdom": "^26.1.0",
+    "typescript": "^7.0.2"
+  }
+}

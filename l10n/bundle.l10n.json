@@ -1,0 +1,1214 @@
+{
+  "Reading the collection…": {
+    "message": "Reading the collection…",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "Looking for collections in the current frame…": {
+    "message": "Looking for collections in the current frame…",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "No collection variables were found in the current frame.": {
+    "message": "No collection variables were found in the current frame.",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "Explore a collection": {
+    "message": "Explore a collection",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "Select the collection to inspect": {
+    "message": "Select the collection to inspect",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "Refreshing the collection…": {
+    "message": "Refreshing the collection…",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "default": {
+    "message": "default",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "Export collection": {
+    "message": "Export collection",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "Select the export format": {
+    "message": "Select the export format",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "Open the collection view to use this action.": {
+    "message": "Open the collection view to use this action.",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "Open \"{0}\"": {
+    "message": "Open \"{0}\"",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "{0} rows": {
+    "message": "{0} rows",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "Pinned \"{0}\".": {
+    "message": "Pinned \"{0}\".",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "Select a collection in the Collections view.": {
+    "message": "Select a collection in the Collections view.",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "Could not open {0}: {1}": {
+    "message": "Could not open {0}: {1}",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "No collection data was found in {0}.": {
+    "message": "No collection data was found in {0}.",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "Read from the source text; no debug session is required.": {
+    "message": "Read from the source text; no debug session is required.",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "collection": {
+    "message": "collection",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "{0} row(s)": {
+    "message": "{0} row(s)",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "Preview collection data": {
+    "message": "Preview collection data",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "Select the collection to preview": {
+    "message": "Select the collection to preview",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "{0} of {1} rows": {
+    "message": "{0} of {1} rows",
+    "comment": [
+      "src/commands/index.ts"
+    ]
+  },
+  "Opens {0} in the collection viewer ({1}).": {
+    "message": "Opens {0} in the collection viewer ({1}).",
+    "comment": [
+      "src/services/codeLens.ts"
+    ]
+  },
+  "Preview data": {
+    "message": "Preview data",
+    "comment": [
+      "src/services/codeLens.ts"
+    ]
+  },
+  "Shows the data the source declares on line {0}, without starting a debug session.": {
+    "message": "Shows the data the source declares on line {0}, without starting a debug session.",
+    "comment": [
+      "src/services/codeLens.ts"
+    ]
+  },
+  "Explore collection": {
+    "message": "Explore collection",
+    "comment": [
+      "src/services/codeLens.ts"
+    ]
+  },
+  "Start a debug session and stop at a breakpoint to explore collections.": {
+    "message": "Start a debug session and stop at a breakpoint to explore collections.",
+    "comment": [
+      "src/services/controller.ts"
+    ]
+  },
+  "The debug type \"{0}\" is not supported by Exploring Collections.": {
+    "message": "The debug type \"{0}\" is not supported by Exploring Collections.",
+    "comment": [
+      "src/services/controller.ts"
+    ]
+  },
+  "This variable cannot be evaluated in the current frame.": {
+    "message": "This variable cannot be evaluated in the current frame.",
+    "comment": [
+      "src/services/controller.ts"
+    ]
+  },
+  "Could not read the collection: {0}": {
+    "message": "Could not read the collection: {0}",
+    "comment": [
+      "src/services/controller.ts"
+    ]
+  },
+  "The data that was read from {0} is no longer there.": {
+    "message": "The data that was read from {0} is no longer there.",
+    "comment": [
+      "src/services/controller.ts"
+    ]
+  },
+  "The debug session for this collection is no longer active.": {
+    "message": "The debug session for this collection is no longer active.",
+    "comment": [
+      "src/services/controller.ts"
+    ]
+  },
+  "No active debug session.": {
+    "message": "No active debug session.",
+    "comment": [
+      "src/services/controller.ts"
+    ]
+  },
+  "none": {
+    "message": "none",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "declaration": {
+    "message": "declaration",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "first usage above the stop line": {
+    "message": "first usage above the stop line",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "below the stop line": {
+    "message": "below the stop line",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "the identifier is not part of this file, so the enclosing scope is used": {
+    "message": "the identifier is not part of this file, so the enclosing scope is used",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "the stop line (the document was not recognised)": {
+    "message": "the stop line (the document was not recognised)",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Extension version": {
+    "message": "Extension version",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Collection panels open": {
+    "message": "Collection panels open",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Setting": {
+    "message": "Setting",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Value": {
+    "message": "Value",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Provider": {
+    "message": "Provider",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Language": {
+    "message": "Language",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Debug types": {
+    "message": "Debug types",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Notes": {
+    "message": "Notes",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Name": {
+    "message": "Name",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Debug type": {
+    "message": "Debug type",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Supported": {
+    "message": "Supported",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Title": {
+    "message": "Title",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Strategy": {
+    "message": "Strategy",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Expression": {
+    "message": "Expression",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Columns": {
+    "message": "Columns",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Variable": {
+    "message": "Variable",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Type": {
+    "message": "Type",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Elements": {
+    "message": "Elements",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "exploringCollections.showCodeLens": {
+    "message": "exploringCollections.showCodeLens",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "editor.codeLens": {
+    "message": "editor.codeLens",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "exploringCollections.showDesignTimePreview": {
+    "message": "exploringCollections.showDesignTimePreview",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Lens line": {
+    "message": "Lens line",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Placed at": {
+    "message": "Placed at",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Stopped file": {
+    "message": "Stopped file",
+    "comment": [
+      "src/services/diagnostics.ts"
+    ]
+  },
+  "Export collection as {0}": {
+    "message": "Export collection as {0}",
+    "comment": [
+      "src/services/exporter.ts"
+    ]
+  },
+  "Export": {
+    "message": "Export",
+    "comment": [
+      "src/services/exporter.ts"
+    ]
+  },
+  "Exported {0} to {1}": {
+    "message": "Exported {0} to {1}",
+    "comment": [
+      "src/services/exporter.ts"
+    ]
+  },
+  "Export failed: {0}": {
+    "message": "Export failed: {0}",
+    "comment": [
+      "src/services/exporter.ts"
+    ]
+  },
+  "{0} copied to clipboard": {
+    "message": "{0} copied to clipboard",
+    "comment": [
+      "src/services/exporter.ts"
+    ]
+  },
+  "Collection View": {
+    "message": "Collection View",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Loading collection…": {
+    "message": "Loading collection…",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Refresh": {
+    "message": "Refresh",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Filter": {
+    "message": "Filter",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Clear filter": {
+    "message": "Clear filter",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Search": {
+    "message": "Search",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Show Chart": {
+    "message": "Show Chart",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Series Settings": {
+    "message": "Series Settings",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Pin collection": {
+    "message": "Pin collection",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Extension settings": {
+    "message": "Extension settings",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Diagnostics": {
+    "message": "Diagnostics",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Copy": {
+    "message": "Copy",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Apply": {
+    "message": "Apply",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Cancel": {
+    "message": "Cancel",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Close": {
+    "message": "Close",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Page size": {
+    "message": "Page size",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Page": {
+    "message": "Page",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "of": {
+    "message": "of",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "rows": {
+    "message": "rows",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Clear all filters": {
+    "message": "Clear all filters",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Select all": {
+    "message": "Select all",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Clear": {
+    "message": "Clear",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Add value": {
+    "message": "Add value",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Include": {
+    "message": "Include",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Exclude": {
+    "message": "Exclude",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Regular expression": {
+    "message": "Regular expression",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Hide column": {
+    "message": "Hide column",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Show column": {
+    "message": "Show column",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Reset column order": {
+    "message": "Reset column order",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Sort ascending": {
+    "message": "Sort ascending",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Sort descending": {
+    "message": "Sort descending",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Clear sorting": {
+    "message": "Clear sorting",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Expand all": {
+    "message": "Expand all",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Collapse all": {
+    "message": "Collapse all",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Load from debugger": {
+    "message": "Load from debugger",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Chart type": {
+    "message": "Chart type",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "X axis": {
+    "message": "X axis",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Y axis": {
+    "message": "Y axis",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Group by": {
+    "message": "Group by",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Aggregation": {
+    "message": "Aggregation",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Series": {
+    "message": "Series",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "None": {
+    "message": "None",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Mean": {
+    "message": "Mean",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Sum": {
+    "message": "Sum",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Min": {
+    "message": "Min",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Max": {
+    "message": "Max",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Count": {
+    "message": "Count",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "First": {
+    "message": "First",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Last": {
+    "message": "Last",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Export to PNG": {
+    "message": "Export to PNG",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "No rows to display": {
+    "message": "No rows to display",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Adjust the filter or refresh the collection.": {
+    "message": "Adjust the filter or refresh the collection.",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Capture time": {
+    "message": "Capture time",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Debugger requests": {
+    "message": "Debugger requests",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Retrieval strategy": {
+    "message": "Retrieval strategy",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Truncated": {
+    "message": "Truncated",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Filtered": {
+    "message": "Filtered",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Total": {
+    "message": "Total",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Error": {
+    "message": "Error",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Warning": {
+    "message": "Warning",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Show value pane": {
+    "message": "Show value pane",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Hide value pane": {
+    "message": "Hide value pane",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Hide the table": {
+    "message": "Hide the table",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Show the table": {
+    "message": "Show the table",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Drag to change the height of the chart": {
+    "message": "Drag to change the height of the chart",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Drag to change the width of the details": {
+    "message": "Drag to change the width of the details",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Active filter": {
+    "message": "Active filter",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Select a row to inspect its value.": {
+    "message": "Select a row to inspect its value.",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Filter the whole collection": {
+    "message": "Filter the whole collection",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "The condition is applied to every element, not only to the rows that were fetched.": {
+    "message": "The condition is applied to every element, not only to the rows that were fetched.",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Add condition": {
+    "message": "Add condition",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Remove condition": {
+    "message": "Remove condition",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Column": {
+    "message": "Column",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Operator": {
+    "message": "Operator",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "to": {
+    "message": "to",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Match all": {
+    "message": "Match all",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Match any": {
+    "message": "Match any",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Enter a value": {
+    "message": "Enter a value",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "contains": {
+    "message": "contains",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "does not contain": {
+    "message": "does not contain",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "equals": {
+    "message": "equals",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "is not": {
+    "message": "is not",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "starts with": {
+    "message": "starts with",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "ends with": {
+    "message": "ends with",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "matches the regular expression": {
+    "message": "matches the regular expression",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "is empty": {
+    "message": "is empty",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "is not empty": {
+    "message": "is not empty",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "greater than": {
+    "message": "greater than",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "greater or equal": {
+    "message": "greater or equal",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "less than": {
+    "message": "less than",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "less or equal": {
+    "message": "less or equal",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "between": {
+    "message": "between",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "is true": {
+    "message": "is true",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "is false": {
+    "message": "is false",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "is null": {
+    "message": "is null",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "is not null": {
+    "message": "is not null",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Position": {
+    "message": "Position",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Copy cell": {
+    "message": "Copy cell",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Copy row": {
+    "message": "Copy row",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Copy all rows": {
+    "message": "Copy all rows",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Copied to clipboard": {
+    "message": "Copied to clipboard",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Bar Chart": {
+    "message": "Bar Chart",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Pie Chart": {
+    "message": "Pie Chart",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Area Chart": {
+    "message": "Area Chart",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Line Chart": {
+    "message": "Line Chart",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Scatter Chart": {
+    "message": "Scatter Chart",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Bubble Chart": {
+    "message": "Bubble Chart",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Stock Chart": {
+    "message": "Stock Chart",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "AreaRange Chart": {
+    "message": "AreaRange Chart",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "Histogram Chart": {
+    "message": "Histogram Chart",
+    "comment": [
+      "src/services/i18n.ts"
+    ]
+  },
+  "explore with Ctrl+Alt+E": {
+    "message": "explore with Ctrl+Alt+E",
+    "comment": [
+      "src/services/inlineValues.ts"
+    ]
+  },
+  "The debug session has ended.": {
+    "message": "The debug session has ended.",
+    "comment": [
+      "src/tree/explorerTree.ts"
+    ]
+  },
+  "This debug type is not supported yet.": {
+    "message": "This debug type is not supported yet.",
+    "comment": [
+      "src/tree/explorerTree.ts"
+    ]
+  },
+  "Run the program to a breakpoint to list its collections.": {
+    "message": "Run the program to a breakpoint to list its collections.",
+    "comment": [
+      "src/tree/explorerTree.ts"
+    ]
+  },
+  "No collections in the current frame.": {
+    "message": "No collections in the current frame.",
+    "comment": [
+      "src/tree/explorerTree.ts"
+    ]
+  },
+  "Could not read the collections of this frame.": {
+    "message": "Could not read the collections of this frame.",
+    "comment": [
+      "src/tree/explorerTree.ts"
+    ]
+  },
+  "Debug Sessions": {
+    "message": "Debug Sessions",
+    "comment": [
+      "src/tree/explorerTree.ts"
+    ]
+  },
+  "Pinned": {
+    "message": "Pinned",
+    "comment": [
+      "src/tree/explorerTree.ts"
+    ]
+  },
+  "Recent": {
+    "message": "Recent",
+    "comment": [
+      "src/tree/explorerTree.ts"
+    ]
+  },
+  "unsupported debug type: {0}": {
+    "message": "unsupported debug type: {0}",
+    "comment": [
+      "src/tree/explorerTree.ts"
+    ]
+  },
+  "Folder": {
+    "message": "Folder",
+    "comment": [
+      "src/tree/explorerTree.ts"
+    ]
+  },
+  "Captured": {
+    "message": "Captured",
+    "comment": [
+      "src/tree/explorerTree.ts"
+    ]
+  },
+  "Open collection": {
+    "message": "Open collection",
+    "comment": [
+      "src/tree/explorerTree.ts"
+    ]
+  },
+  "This collection is no longer available. Capture it again from the debug session.": {
+    "message": "This collection is no longer available. Capture it again from the debug session.",
+    "comment": [
+      "src/webview/panel.ts"
+    ]
+  },
+  "Refreshing collection…": {
+    "message": "Refreshing collection…",
+    "comment": [
+      "src/webview/panel.ts"
+    ]
+  },
+  "Collection refreshed.": {
+    "message": "Collection refreshed.",
+    "comment": [
+      "src/webview/panel.ts"
+    ]
+  },
+  "Filtering…": {
+    "message": "Filtering…",
+    "comment": [
+      "src/webview/panel.ts"
+    ]
+  },
+  "Copied to clipboard.": {
+    "message": "Copied to clipboard.",
+    "comment": [
+      "src/webview/panel.ts"
+    ]
+  },
+  "Collection pinned.": {
+    "message": "Collection pinned.",
+    "comment": [
+      "src/webview/panel.ts"
+    ]
+  },
+  "Nothing to export: the view is empty.": {
+    "message": "Nothing to export: the view is empty.",
+    "comment": [
+      "src/webview/panel.ts"
+    ]
+  },
+  "Exported to {0}": {
+    "message": "Exported to {0}",
+    "comment": [
+      "src/webview/panel.ts"
+    ]
+  },
+  "The chart image could not be encoded.": {
+    "message": "The chart image could not be encoded.",
+    "comment": [
+      "src/webview/panel.ts"
+    ]
+  },
+  "Export chart as PNG": {
+    "message": "Export chart as PNG",
+    "comment": [
+      "src/webview/panel.ts"
+    ]
+  },
+  "Chart saved to {0}": {
+    "message": "Chart saved to {0}",
+    "comment": [
+      "src/webview/panel.ts"
+    ]
+  }
+}

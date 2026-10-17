@@ -1,0 +1,13 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "ms-vscode.vscode-typescript-next",
+    "ms-dotnettools.csharp",
+    "Ionide.Ionide-fsharp",
+    "ms-python.python",
+    "golang.go",
+    "rust-lang.rust-analyzer",
+    "vadimcn.vscode-lldb",
+    "ms-vscode.cpptools"
+  ]
+}

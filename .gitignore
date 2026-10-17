@@ -426,3 +426,22 @@ FodyWeavers.xsd
 
 # Official VS Code C# Dev Kit Extension exclusion
 #*.lscache
+
+## Project specifics (VS Code extension)
+##
+## The Visual Studio template above ignores every `[Dd]ebug/` directory, which
+## would also hide the extension sources in `src/debug/`; they are re-included
+## here. Build output of the bundles, the helpers and the test runs is ignored
+## instead, because `npm run build`, `dotnet build` and the helper suites
+## recreate it.
+
+!src/debug/
+
+# esbuild bundles (dist/extension.js, dist/webview.js) and the test bundles (out/)
+/dist/
+
+# C/C++ helper self tests (helpers/cc/build_and_test.sh)
+/helpers/cc/build/
+
+# Rust helper crate
+/helpers/rust/target/

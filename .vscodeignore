@@ -1,0 +1,27 @@
+.vscode/**
+.vscode-test/**
+src/**
+webview/**
+test/**
+out/**
+scripts/**
+node_modules/**
+*.vsix
+**/*.ts
+**/*.map
+**/*.tsbuildinfo
+esbuild.mjs
+tsconfig.json
+.gitignore
+.editorconfig
+.github/**
+CONTRIBUTING.md
+
+# Helper sources: only the files that are loaded or referenced at runtime ship.
+helpers/**
+!helpers/README.md
+!helpers/python/exploring_collections_helper.py
+!helpers/dotnet/dist/ExploringCollections.Helper.dll
+!helpers/go/exploring_collections.go
+!helpers/rust/exploring_collections.rs
+!helpers/cc/exploring_collections.h

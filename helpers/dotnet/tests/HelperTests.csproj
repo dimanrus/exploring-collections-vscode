@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Self contained checks for the helper. Run it with:
+
+        dotnet run -c Release  (from this directory)
+
+    A plain console app is used on purpose: it needs no test framework packages,
+    so the repository stays free of NuGet downloads.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>ExploringCollections.Helper.Tests</AssemblyName>
+    <RootNamespace>ExploringCollections.Helper.Tests</RootNamespace>
+    <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ExploringCollections.Helper.csproj" />
+  </ItemGroup>
+
+</Project>

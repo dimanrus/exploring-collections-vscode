@@ -1,0 +1,16 @@
+[package]
+name = "exploring-collections-helper"
+version = "1.0.0"
+edition = "2021"
+publish = false
+description = "Test harness for the Exploring Collections Rust helper module."
+license = "MIT"
+
+# The helper itself is the standalone file `exploring_collections.rs`, which users
+# copy into their crate. This package only exists so the module can be compiled
+# and tested from the repository:
+#     cargo test
+[dependencies]
+
+[lib]
+path = "src/lib.rs"
