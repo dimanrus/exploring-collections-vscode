@@ -12,12 +12,7 @@ export const INLINE_HINT_LANGUAGES = [
   'javascript',
   'typescript',
   'javascriptreact',
-  'typescriptreact',
-  'python',
-  'go',
-  'rust',
-  'cpp',
-  'c'
+  'typescriptreact'
 ];
 
 /**

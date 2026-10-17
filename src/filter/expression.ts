@@ -1,6 +1,6 @@
 /**
  * A small expression language used for collection filters. The canonical syntax
- * is LINQ flavoured (`x => x.City == "Seoul" && x.DegreeCelsius > 20`), which is
+ * is expression flavoured (`x => x.City == "Seoul" && x.DegreeCelsius > 20`), which is
  * the form most people type, but it also accepts F# style `fun x -> ...`, SQL style
  * `WHERE ...`, and `and` / `or` / `not` keywords.
  */
@@ -372,7 +372,7 @@ class Parser {
         return { kind: 'literal', value: parseNumberLiteral(token.value), raw: token.value };
       case 'string':
         // `raw` keeps a quoted, escaped form so the literal can be re-emitted for
-        // another language (LINQ pushdown) without corrupting its content.
+        // another language (native pushdown) without corrupting its content.
         return { kind: 'literal', value: token.value, raw: quoteString(token.value) };
       case 'boolean':
         return { kind: 'literal', value: token.value === 'true', raw: token.value };

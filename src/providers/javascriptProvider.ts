@@ -82,8 +82,11 @@ export class JavaScriptProvider extends AbstractLanguageProvider {
   override readonly adapterHints = ['js-debug', 'vscode-chrome-debug', 'vscode-node-debug2'];
   override readonly notes = [
     'Collections are serialized by an injected IIFE, so Map, Set, typed arrays and getters are reported accurately.',
-    'Expressions run in the frame context and can reference any local variable of the current statement.'
+    'Expressions run in the frame context and can reference any local variable of the current statement.',
+    'Object members are read from the adapter previews when js-debug describes them fully, which avoids one request per element.'
   ];
+  /** js-debug previews objects as `{id: 1, name: 'x'}`, complete for flat records. */
+  override readonly readElementsFromPreviews = true;
 
   protected override get handledLanguages(): readonly LanguageId[] {
     return ['javascript', 'typescript'];
@@ -104,10 +107,6 @@ export class JavaScriptProvider extends AbstractLanguageProvider {
       exact: emitted.exact,
       notes: emitted.notes
     };
-  }
-
-  override buildRangeExpression(source: string, start: number, count: number): string {
-    return buildJavaScriptSerializer(`Array.prototype.slice.call(${source}, ${start}, ${start + count})`, 6, count);
   }
 
   override buildMemberExpression(source: string, path: readonly string[]): string {

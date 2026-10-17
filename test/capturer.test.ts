@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { writeFileSync } from 'node:fs';
 
 import {
   captureCollection,
@@ -52,6 +53,8 @@ class FakeDap {
       ignorePaging?: boolean;
       rejectPaging?: boolean;
       latencyMs?: number;
+      /** Answers a `WriteJsonFile(...)` call by writing this JSON payload. */
+      file?: (start: number, count: number) => string | undefined;
     } = {}
   ) {}
 
@@ -86,6 +89,14 @@ class FakeDap {
     | { ok: false; error: Error; unsupported: boolean }
   > {
     this.evaluated.push(expression);
+    const fileCall = /WriteJsonFile\([^,]+, (\d+), (\d+), "([^"]+)"\)/.exec(expression);
+    if (fileCall && this.quirks.file) {
+      const payload = this.quirks.file(Number(fileCall[1]), Number(fileCall[2]));
+      if (payload !== undefined) {
+        writeFileSync(fileCall[3] as string, payload, 'utf8');
+        return { ok: true, value: { result: String(payload.length), variablesReference: 0 } };
+      }
+    }
     const outcome = this.evaluator(expression);
     if (!outcome) {
       return { ok: false, error: new Error(`no evaluator for '${expression}'`), unsupported: false };
@@ -136,13 +147,34 @@ function weatherTree(): Map<number, FakeVariable[]> {
   return tree;
 }
 
-function weatherPayload(): string {
-  const items = Array.from({ length: ELEMENT_COUNT }, (_, index) => ({
-    City: city(index),
-    DegreeCelsius: deg(index),
+function weatherPayload(start = 0, count = ELEMENT_COUNT): string {
+  const items = Array.from({ length: Math.max(0, Math.min(count, ELEMENT_COUNT - start)) }, (_, index) => ({
+    City: city(start + index),
+    DegreeCelsius: deg(start + index),
     Feels: 'normal'
   }));
-  return JSON.stringify({ __ec: 1, kind: 'sequence', total: items.length, items });
+  return JSON.stringify({ __ec: 1, kind: 'sequence', total: ELEMENT_COUNT, items });
+}
+
+/** Fake adapter that serves the weather collection through the helper file. */
+function fastWeatherDap(evaluator: (expression: string) => Evaluation = () => undefined): FakeDap {
+  return new FakeDap(
+    weatherTree(),
+    (expression) =>
+      expression.startsWith('System.Reflection.Assembly.LoadFrom')
+        ? { ok: true, result: '{ExploringCollections.Helper}' }
+        : evaluator(expression),
+    { file: (start, count) => weatherPayload(start, count) }
+  );
+}
+
+/** Capture request served by the JavaScript provider. */
+function jsCaptureRequest(dap: FakeDap, overrides: Partial<CaptureRequest> = {}): CaptureRequest {
+  return captureRequest(dap, {
+    provider: registry.byId('javascript')!,
+    session: { id: 'session-js', name: 'Node', debugType: 'node' },
+    ...overrides
+  });
 }
 
 /** A flat collection of `count` primitive elements behind variables reference 1. */
@@ -152,30 +184,6 @@ function indexedTree(count: number): Map<number, FakeVariable[]> {
     elements.push({ name: `[${index}]`, value: String(index), type: 'int', variablesReference: 0 });
   }
   return new Map<number, FakeVariable[]>([[1, elements]]);
-}
-
-/** Splits the `Skip(items, start), count)` part out of a C# range expression. */
-function rangeOf(expression: string): { start: number; count: number } | undefined {
-  const match = /Skip\(items, (\d+)\), (\d+)\)/.exec(expression);
-  return match ? { start: Number(match[1]), count: Number(match[2]) } : undefined;
-}
-
-/**
- * Evaluator that answers the C# range expression with a JSON page, the way a
- * real .NET evaluator does once the page is serialized.
- */
-function rangeEvaluator(rows: number, cutAbove = Number.MAX_SAFE_INTEGER) {
-  return (expression: string): Evaluation => {
-    const range = rangeOf(expression);
-    if (!range) {
-      return undefined;
-    }
-    const length = Math.max(0, Math.min(range.count, rows - range.start));
-    const items = Array.from({ length }, (_, index) => ({ Id: range.start + index }));
-    const payload = JSON.stringify(items);
-    // Mimics an adapter that cuts long strings: big pages come back unparseable.
-    return { ok: true, result: range.count > cutAbove ? payload.slice(0, 40) : payload };
-  };
 }
 
 /** A collection of `count` objects, so every element costs a request to expand. */
@@ -201,28 +209,11 @@ function objectTree(count: number): Map<number, FakeVariable[]> {
   return tree;
 }
 
-/**
- * Mimics an adapter that elides long results in the middle, the way js-debug
- * does: the text still parses as JSON, but members are mangled and rows are gone.
- */
-function elidingEvaluator(rows: number, limitChars: number) {
-  return (expression: string): Evaluation => {
-    const range = rangeOf(expression);
-    if (!range) {
-      return undefined;
-    }
-    const length = Math.max(0, Math.min(range.count, rows - range.start));
-    const items = Array.from({ length }, (_, index) => ({ Id: range.start + index }));
-    const payload = JSON.stringify({ __ec: 1, kind: 'sequence', total: items.length, items });
-    return {
-      ok: true,
-      result:
-        payload.length <= limitChars
-          ? payload
-          : `${payload.slice(0, limitChars - 60)}…${payload.slice(-60)}`
-    };
-  };
-}
+/** Evaluator that answers the helper load call the way vsdbg does. */
+const helperLoadEvaluator = (expression: string): Evaluation =>
+  expression.startsWith('System.Reflection.Assembly.LoadFrom')
+    ? { ok: true, result: '{ExploringCollections.Helper}' }
+    : undefined;
 
 /** Walk root of a flat collection that reports its element count. */
 function flatRoot(name: string, childCount: number) {
@@ -241,7 +232,6 @@ const options: CaptureOptions = {
   maxDepth: 3,
   concurrency: 4,
   timeoutMs: 1000,
-  useHelpers: true,
   dictionariesAsRows: true,
   excludedMembers: ['Capacity', 'Count', 'Length']
 };
@@ -298,14 +288,12 @@ function filterRequest(
 }
 
 describe('capture through a serializer (fast path)', () => {
-  it('uses the JSON serializer when the adapter can evaluate it', async () => {
+  it('uses the JavaScript serializer when the adapter can evaluate it', async () => {
     const dap = new FakeDap(weatherTree(), (expression) =>
-      expression.startsWith('System.Text.Json.JsonSerializer.Serialize')
-        ? { ok: true, result: weatherPayload() }
-        : undefined
+      expression.includes('JSON.stringify') ? { ok: true, result: weatherPayload() } : undefined
     );
 
-    const snapshot = await captureCollection(captureRequest(dap));
+    const snapshot = await captureCollection(jsCaptureRequest(dap));
 
     assert.equal(snapshot.diagnostics.strategy, 'helper-json');
     assert.equal(snapshot.rows.length, ELEMENT_COUNT);
@@ -320,35 +308,16 @@ describe('capture through a serializer (fast path)', () => {
     assert.equal(dap.requests, 0, 'the variables tree must not be touched');
   });
 
-  it('falls back to the next serializer candidate', async () => {
-    const dap = new FakeDap(weatherTree(), (expression) =>
-      expression.startsWith('Newtonsoft')
-        ? { ok: true, result: weatherPayload() }
-        : { ok: false, error: 'expression evaluator does not support this' }
-    );
-
-    const snapshot = await captureCollection(captureRequest(dap));
-
-    assert.equal(snapshot.diagnostics.strategy, 'helper-json');
-    assert.equal(snapshot.rows.length, ELEMENT_COUNT);
-    assert.equal(
-      dap.evaluated.filter((expression) => expression.includes('Serialize')).length,
-      3,
-      'all three serializer candidates were tried'
-    );
-  });
-
   it('loads the bundled helper assembly and uses it once per session', async () => {
     const helperState: SessionHelperState = { attempted: false, loaded: false };
-    const dap = new FakeDap(weatherTree(), (expression) => {
-      if (expression.startsWith('System.Reflection.Assembly.LoadFrom')) {
-        return { ok: true, result: '{ExploringCollections.Helper, Version=1.0.0.0}' };
-      }
-      if (expression.startsWith('ExploringCollections.CollectionHelper.ToJson')) {
-        return { ok: true, result: weatherPayload() };
-      }
-      return undefined;
-    });
+    const dap = new FakeDap(
+      weatherTree(),
+      (expression) =>
+        expression.startsWith('System.Reflection.Assembly.LoadFrom')
+          ? { ok: true, result: '{ExploringCollections.Helper, Version=1.0.0.0}' }
+          : undefined,
+      { file: (start, count) => weatherPayload(start, count) }
+    );
 
     const first = await captureCollection(captureRequest(dap, { helperState }));
     assert.equal(first.diagnostics.strategy, 'helper-native');
@@ -364,7 +333,7 @@ describe('capture through a serializer (fast path)', () => {
     );
   });
 
-  it('records why the helper could not be loaded and walks instead', async () => {
+  it('refuses to walk a .NET collection when the helper cannot be loaded', async () => {
     const helperState: SessionHelperState = { attempted: false, loaded: false };
     const dap = new FakeDap(weatherTree(), (expression) =>
       expression.startsWith('System.Reflection.Assembly.LoadFrom')
@@ -372,44 +341,124 @@ describe('capture through a serializer (fast path)', () => {
         : { ok: false, error: 'not supported' }
     );
 
-    const snapshot = await captureCollection(captureRequest(dap, { helperState }));
-
+    await assert.rejects(
+      () => captureCollection(captureRequest(dap, { helperState })),
+      /helper load failed/
+    );
     assert.equal(helperState.loaded, false);
-    assert.equal(snapshot.diagnostics.strategy, 'variables-walk');
-    assert.ok(snapshot.diagnostics.fallbackReasons.some((reason) => reason.includes('helper load failed')));
   });
 
-  it('skips every helper when the user disables them', async () => {
-    const dap = new FakeDap(weatherTree(), () => ({ ok: false, error: 'must not be called' }));
-
-    const snapshot = await captureCollection(
-      captureRequest(dap, { options: { ...options, useHelpers: false } })
-    );
-
-    assert.equal(snapshot.diagnostics.strategy, 'variables-walk');
-    assert.equal(dap.evaluated.length, 0);
-  });
-
-  it('marks a payload as truncated when the helper returned fewer items', async () => {
-    const dap = new FakeDap(weatherTree(), (expression) =>
-      expression.startsWith('System.Text.Json')
-        ? {
-            ok: true,
-            result: JSON.stringify({
-              __ec: 1,
-              kind: 'sequence',
-              total: 1000,
-              items: [{ City: 'Seoul', DegreeCelsius: 21 }]
-            })
-          }
-        : undefined
-    );
+  it('marks the snapshot as truncated when the helper file holds fewer items', async () => {
+    const dap = new FakeDap(weatherTree(), helperLoadEvaluator, {
+      file: () =>
+        JSON.stringify({
+          __ec: 1,
+          kind: 'sequence',
+          total: 1000,
+          items: [{ City: 'Seoul', DegreeCelsius: 21 }]
+        })
+    });
 
     const snapshot = await captureCollection(captureRequest(dap));
 
     assert.equal(snapshot.truncated, true);
     assert.equal(snapshot.totalItems, 1000);
+    assert.equal(snapshot.rows.length, 1);
     assert.ok(snapshot.warnings.some((warning) => warning.includes('1,000')));
+  });
+});
+
+describe('capture from adapter previews', () => {
+  /** js-debug shape: the whole array arrives with complete object previews. */
+  function previewTree(count: number): Map<number, FakeVariable[]> {
+    const elements: FakeVariable[] = [];
+    for (let index = 0; index < count; index += 1) {
+      elements.push({
+        name: `[${index}]`,
+        value: `{Id: ${index}, Name: 'n${index}', Active: true}`,
+        type: 'Object',
+        variablesReference: 100 + index,
+        evaluateName: `items[${index}]`
+      });
+    }
+    return new Map<number, FakeVariable[]>([[1, elements]]);
+  }
+
+  const javascript = registry.byId('javascript')!;
+
+  it('builds every row from the previews instead of expanding 5000 objects', async () => {
+    const dap = new FakeDap(previewTree(5000), () => undefined, { pageCap: 1024 });
+
+    const snapshot = await captureCollection(
+      captureRequest(dap, {
+        provider: javascript,
+        session: { id: 'session-js', name: 'Node', debugType: 'node' },
+        source: 'items',
+        root: {
+          name: 'items',
+          variablesReference: 1,
+          evaluateName: 'items',
+          typeName: 'Array',
+          childCount: 5000
+        },
+        options: { ...options, maxRows: 5000 }
+      })
+    );
+
+    assert.equal(snapshot.diagnostics.strategy, 'adapter-previews');
+    assert.equal(snapshot.rows.length, 5000);
+    assert.equal(snapshot.truncated, false);
+    assert.deepEqual(
+      snapshot.columns.map((column) => column.key),
+      ['#', 'Active', 'Id', 'Name']
+    );
+    const columnIndex = (key: string): number =>
+      snapshot.columns.findIndex((column) => column.key === key);
+    assert.equal(snapshot.rows[0]!.cells[columnIndex('Id')]!.text, '0');
+    assert.equal(snapshot.rows[0]!.cells[columnIndex('Active')]!.text, 'true');
+    assert.equal(snapshot.rows[4999]!.cells[columnIndex('Name')]!.text, 'n4999');
+    assert.ok(
+      dap.requests <= 10,
+      `the previews must not cost one request per element, it made ${dap.requests}`
+    );
+  });
+
+  it('falls back to expanding when the previews are elided', async () => {
+    const tree = previewTree(120);
+    const elements = tree.get(1) as FakeVariable[];
+    for (const element of elements) {
+      element.value = `{Id: ${element.name}, Address: {…}, …}`;
+    }
+    tree.set(1, elements);
+    for (let index = 0; index < 120; index += 1) {
+      tree.set(100 + index, [
+        { name: 'Id', value: String(index), type: 'number', variablesReference: 0 },
+        { name: 'Name', value: `'n${index}'`, type: 'string', variablesReference: 0 }
+      ]);
+    }
+    const dap = new FakeDap(tree, () => undefined, { pageCap: 1024 });
+
+    const snapshot = await captureCollection(
+      captureRequest(dap, {
+        provider: javascript,
+        session: { id: 'session-js', name: 'Node', debugType: 'node' },
+        source: 'items',
+        root: {
+          name: 'items',
+          variablesReference: 1,
+          evaluateName: 'items',
+          typeName: 'Array',
+          childCount: 120
+        }
+      })
+    );
+
+    assert.equal(snapshot.diagnostics.strategy, 'variables-walk');
+    assert.equal(snapshot.rows.length, 120);
+    assert.ok(
+      dap.requests > 100,
+      `an elided preview must be expanded, it made ${dap.requests} requests`
+    );
   });
 });
 
@@ -417,7 +466,7 @@ describe('capture through the variables walk', () => {
   it('enumerates the elements and derives the columns', async () => {
     const dap = new FakeDap(weatherTree(), () => undefined);
 
-    const snapshot = await captureCollection(captureRequest(dap));
+    const snapshot = await captureCollection(jsCaptureRequest(dap));
 
     assert.equal(snapshot.diagnostics.strategy, 'variables-walk');
     assert.equal(snapshot.rows.length, ELEMENT_COUNT);
@@ -445,7 +494,7 @@ describe('capture through the variables walk', () => {
     ]);
     const dap = new FakeDap(tree, () => undefined);
 
-    const snapshot = await captureCollection(captureRequest(dap));
+    const snapshot = await captureCollection(jsCaptureRequest(dap));
 
     const keys = snapshot.columns.map((column) => column.key);
     for (const noise of ['Count', 'Capacity', 'Length', 'Raw View', 'Non-Public members', 'Static members']) {
@@ -456,7 +505,7 @@ describe('capture through the variables walk', () => {
   it('honours maxRows and reports the truncation', async () => {
     const dap = new FakeDap(weatherTree(), () => undefined);
 
-    const snapshot = await captureCollection(captureRequest(dap, { options: { ...options, maxRows: 3 } }));
+    const snapshot = await captureCollection(jsCaptureRequest(dap, { options: { ...options, maxRows: 3 } }));
 
     assert.equal(snapshot.rows.length, 3);
     assert.equal(snapshot.truncated, true);
@@ -471,7 +520,7 @@ describe('capture through the variables walk', () => {
     const dap = new FakeDap(indexedTree(120), () => undefined, { pageCap: 25 });
 
     const snapshot = await captureCollection(
-      captureRequest(dap, { title: 'items', source: 'items', root: flatRoot('items', 120) })
+      jsCaptureRequest(dap, { title: 'items', source: 'items', root: flatRoot('items', 120) })
     );
 
     assert.equal(snapshot.rows.length, 120, 'a capped adapter must not cap the window');
@@ -483,7 +532,7 @@ describe('capture through the variables walk', () => {
     const dap = new FakeDap(indexedTree(120), () => undefined, { pageCap: 25 });
 
     const snapshot = await captureCollection(
-      captureRequest(dap, {
+      jsCaptureRequest(dap, {
         title: 'items',
         source: 'items',
         root: flatRoot('items', 120),
@@ -497,15 +546,20 @@ describe('capture through the variables walk', () => {
   });
 
   it('stops instead of looping when the adapter ignores the page range', async () => {
-    const dap = new FakeDap(indexedTree(120), () => undefined, { ignorePaging: true, pageCap: 25 });
+    const dap = new FakeDap(objectTree(120), () => undefined, { ignorePaging: true, pageCap: 25 });
 
     const snapshot = await captureCollection(
-      captureRequest(dap, { title: 'items', source: 'items', root: flatRoot('items', 120) })
+      jsCaptureRequest(dap, {
+        title: 'items',
+        source: 'items',
+        root: { ...flatRoot('items', 120), typeName: 'List<Item>' }
+      })
     );
 
     assert.equal(snapshot.rows.length, 25);
     assert.equal(snapshot.truncated, true);
-    assert.ok(dap.requests <= 3, `the walk must stop early, it made ${dap.requests} requests`);
+    // One request per expanded element plus the root pages: bounded, no loop.
+    assert.ok(dap.requests <= 40, `the walk must stop early, it made ${dap.requests} requests`);
     assert.ok(
       snapshot.warnings.some(
         (warning) =>
@@ -520,7 +574,7 @@ describe('capture through the variables walk', () => {
     const dap = new FakeDap(indexedTree(120), () => undefined, { rejectPaging: true });
 
     const snapshot = await captureCollection(
-      captureRequest(dap, { title: 'items', source: 'items', root: flatRoot('items', 120) })
+      jsCaptureRequest(dap, { title: 'items', source: 'items', root: flatRoot('items', 120) })
     );
 
     assert.equal(snapshot.rows.length, 120);
@@ -547,7 +601,55 @@ describe('capture through the variables walk', () => {
       indexedVariables: 12,
       namedVariables: 2
     });
-    assert.equal(withCounters.childCount, 14, 'the counters win over the preview');
+    assert.equal(
+      withCounters.childCount,
+      12,
+      'the indexed elements win over the preview and over the members (Count, Capacity)'
+    );
+
+    const array = toWalkRoot({
+      // js-debug reports an array as 50000 indexed elements plus one named
+      // member (its length), so the counters must not be added together.
+      name: 'employees',
+      value: 'Array(50000)',
+      type: 'Array',
+      variablesReference: 8,
+      indexedVariables: 50000,
+      namedVariables: 1
+    });
+    assert.equal(array.childCount, 50000);
+
+    const dictionary = toWalkRoot({
+      name: 'lookup',
+      value: 'Map(3)',
+      type: 'Map',
+      variablesReference: 9,
+      indexedVariables: 0,
+      namedVariables: 3
+    });
+    assert.equal(dictionary.childCount, 3);
+
+    // vsdbg may report one named member (Count) next to `Count = 1000`; the
+    // preview size is the collection size, not the member count.
+    const listWithMemberCounter = toWalkRoot({
+      name: 'employees',
+      value: 'Count = 1000',
+      type: 'List<Employee>',
+      variablesReference: 10,
+      indexedVariables: 0,
+      namedVariables: 1
+    });
+    assert.equal(listWithMemberCounter.childCount, 1000);
+
+    const recordWithCountMember = toWalkRoot({
+      name: 'summary',
+      value: "{Count: 3, Name: 'x'}",
+      type: 'Object',
+      variablesReference: 11,
+      indexedVariables: 0,
+      namedVariables: 2
+    });
+    assert.equal(recordWithCountMember.childCount, 2, 'a member named Count is not a collection size');
   });
 
   it('pages until the count the preview promised is reached', async () => {
@@ -563,7 +665,7 @@ describe('capture through the variables walk', () => {
     });
 
     const snapshot = await captureCollection(
-      captureRequest(dap, { title: 'items', source: 'items', root })
+      jsCaptureRequest(dap, { title: 'items', source: 'items', root })
     );
 
     assert.equal(snapshot.rows.length, 120);
@@ -571,84 +673,64 @@ describe('capture through the variables walk', () => {
     assert.equal(snapshot.totalItems, 120);
   });
 
-  it('reads the collection through evaluator pages when the adapter hands over a window', async () => {
-    const dap = new FakeDap(indexedTree(120), rangeEvaluator(120), {
-      ignorePaging: true,
-      pageCap: 25
+  it('reads a 1000 element list from the helper file in one request', async () => {
+    const dap = new FakeDap(indexedTree(1000), helperLoadEvaluator, {
+      file: (start, count) => {
+        const items = Array.from({ length: Math.max(0, Math.min(count, 1000 - start)) }, (_, index) => ({
+          Id: start + index,
+          Name: `n${start + index}`
+        }));
+        return JSON.stringify({ __ec: 1, kind: 'sequence', total: 1000, items });
+      }
     });
 
     const snapshot = await captureCollection(
-      captureRequest(dap, { title: 'items', source: 'items', root: flatRoot('items', 120) })
+      captureRequest(dap, {
+        title: 'items',
+        source: 'items',
+        root: { ...flatRoot('items', 1000), typeName: 'List<Employee>' }
+      })
     );
 
-    assert.equal(snapshot.diagnostics.strategy, 'expression-subrange');
-    assert.equal(snapshot.rows.length, 120);
+    assert.equal(
+      snapshot.diagnostics.strategy,
+      'helper-native',
+      `reasons: ${JSON.stringify(snapshot.diagnostics.fallbackReasons)}`
+    );
+    assert.equal(snapshot.rows.length, 1000);
+    assert.equal(snapshot.totalItems, 1000);
     assert.equal(snapshot.truncated, false);
+    assert.ok(
+      dap.requests <= 3,
+      `the whole list must travel in one helper call, it made ${dap.requests} requests`
+    );
     assert.deepEqual(
-      snapshot.rows.slice(0, 3).map((row) => row.label),
-      ['[0]', '[1]', '[2]'],
-      'pages keep their absolute positions'
+      snapshot.columns.map((column) => column.key),
+      ['#', 'Id', 'Name']
     );
+    assert.equal(snapshot.rows[999]?.cells[1]?.text, '999');
+    assert.equal(snapshot.rows[999]?.cells[2]?.text, 'n999');
   });
 
-  it('reads a large declared collection through pages instead of walking it', async () => {
-    const dap = new FakeDap(indexedTree(5000), rangeEvaluator(5000), { ignorePaging: true, pageCap: 25 });
-
-    const snapshot = await captureCollection(
-      captureRequest(dap, { title: 'items', source: 'items', root: flatRoot('items', 5000) })
-    );
-
-    assert.equal(snapshot.diagnostics.strategy, 'expression-subrange');
-    assert.equal(snapshot.rows.length, 5000);
-    assert.equal(snapshot.truncated, false);
-    assert.equal(dap.requests, 0, 'a big declared window must not be walked element by element');
-    const pages = dap.evaluated.filter((expression) => expression.includes('Skip(items'));
-    assert.equal(pages.length, 5, `5000 elements need five pages of 1024, got ${pages.length}`);
-    assert.equal(snapshot.rows[1024]?.label, '[1024]', 'labels keep their absolute position across pages');
-  });
-
-  it('shrinks the evaluator page when the payload comes back cut', async () => {
-    // Only pages of 16 items and fewer survive the adapter, so the reader has to
-    // back off instead of giving up.
-    const dap = new FakeDap(indexedTree(120), rangeEvaluator(120, 16), {
-      ignorePaging: true,
-      pageCap: 25
+  it('falls back to the walk when the helper file cannot be read', async () => {
+    const dap = new FakeDap(indexedTree(120), helperLoadEvaluator, {
+      // The adapter answers, but no file appears (a remote debuggee, for example).
+      file: () => undefined
     });
 
     const snapshot = await captureCollection(
-      captureRequest(dap, { title: 'items', source: 'items', root: flatRoot('items', 120) })
+      jsCaptureRequest(dap, { title: 'items', source: 'items', root: flatRoot('items', 120) })
     );
 
-    assert.equal(snapshot.diagnostics.strategy, 'expression-subrange');
-    assert.equal(snapshot.rows.length, 120);
-  });
-
-  it('never accepts a page the adapter elided in the middle', async () => {
-    const dap = new FakeDap(indexedTree(120), elidingEvaluator(120, 400), {
-      ignorePaging: true,
-      pageCap: 25
-    });
-
-    const snapshot = await captureCollection(
-      captureRequest(dap, { title: 'items', source: 'items', root: flatRoot('items', 120) })
-    );
-
-    assert.equal(snapshot.diagnostics.strategy, 'expression-subrange');
-    assert.deepEqual(
-      snapshot.rows.map((row) => row.label),
-      Array.from({ length: 120 }, (_, index) => `[${index}]`),
-      'rows must be real elements, not survivors of an elided payload'
-    );
-    for (const row of snapshot.rows) {
-      assert.match(row.cells[1]?.text ?? '', /^\d+$/, 'every cell must carry a real value');
-    }
+    assert.equal(snapshot.diagnostics.strategy, 'variables-walk');
+    assert.ok(snapshot.rows.length > 0);
   });
 
   it('keeps the walk result when the evaluator cannot express a range', async () => {
     const dap = new FakeDap(indexedTree(120), () => undefined, { ignorePaging: true, pageCap: 25 });
 
     const snapshot = await captureCollection(
-      captureRequest(dap, { title: 'items', source: 'items', root: flatRoot('items', 120) })
+      jsCaptureRequest(dap, { title: 'items', source: 'items', root: flatRoot('items', 120) })
     );
 
     assert.equal(snapshot.diagnostics.strategy, 'variables-walk');
@@ -662,7 +744,7 @@ describe('capture through the variables walk', () => {
     const dap = new FakeDap(objectTree(400), () => undefined, { latencyMs: 5 });
 
     const snapshot = await captureCollection(
-      captureRequest(dap, {
+      jsCaptureRequest(dap, {
         title: 'items',
         source: 'items',
         root: flatRoot('items', 400),
@@ -694,7 +776,7 @@ describe('capture through the variables walk', () => {
     const dap = new FakeDap(tree, () => undefined);
 
     const snapshot = await captureCollection(
-      captureRequest(dap, {
+      jsCaptureRequest(dap, {
         title: 'lookup',
         source: 'lookup',
         root: { name: 'lookup', variablesReference: 1, typeName: 'Dictionary<string,int>', childCount: 3 }
@@ -726,7 +808,7 @@ describe('capture through the variables walk', () => {
     const dap = new FakeDap(tree, () => undefined);
 
     const snapshot = await captureCollection(
-      captureRequest(dap, {
+      jsCaptureRequest(dap, {
         options: { ...options, dictionariesAsRows: false },
         root: { name: 'lookup', variablesReference: 1, typeName: 'Dictionary<string,int>' }
       })
@@ -753,7 +835,7 @@ describe('capture through the variables walk', () => {
     const dap = new FakeDap(tree, () => undefined);
 
     const snapshot = await captureCollection(
-      captureRequest(dap, {
+      jsCaptureRequest(dap, {
         title: 'temperature',
         source: 'temperature',
         root: { name: 'temperature', variablesReference: 1, typeName: 'Temperature' }
@@ -773,7 +855,7 @@ describe('capture through the variables walk', () => {
     const dap = new FakeDap(new Map(), () => undefined);
 
     const snapshot = await captureCollection(
-      captureRequest(dap, { root: { name: 'x', variablesReference: 0 } })
+      jsCaptureRequest(dap, { root: { name: 'x', variablesReference: 0 } })
     );
 
     assert.equal(snapshot.rows.length, 0);
@@ -784,7 +866,7 @@ describe('capture through the variables walk', () => {
   it('stops when the request budget is exhausted', async () => {
     const dap = new FakeDap(weatherTree(), () => undefined);
 
-    const snapshot = await captureCollection(captureRequest(dap, { requestBudget: 3 }));
+    const snapshot = await captureCollection(jsCaptureRequest(dap, { requestBudget: 3 }));
 
     assert.ok(
       snapshot.warnings.some((warning) => warning.includes('stopped after')),
@@ -796,7 +878,7 @@ describe('capture through the variables walk', () => {
 
 describe('filtering a snapshot', () => {
   it('filters on the client when every row was fetched', async () => {
-    const dap = new FakeDap(weatherTree(), () => undefined);
+    const dap = fastWeatherDap();
     const snapshot = await captureCollection(captureRequest(dap));
 
     const outcome = await filterCollection(filterRequest(dap, snapshot, 'x => x.City == "Seoul"'));
@@ -816,7 +898,7 @@ describe('filtering a snapshot', () => {
       { City: 'Sofia', DegreeCelsius: 24, Feels: 'normal' },
       { City: 'Houston', DegreeCelsius: 22, Feels: 'normal' }
     ];
-    const dap = new FakeDap(weatherTree(), (expression) =>
+    const dap = fastWeatherDap((expression) =>
       expression.includes('Enumerable.Where')
         ? { ok: true, result: JSON.stringify({ __ec: 1, kind: 'sequence', total: pushed.length, items: pushed }) }
         : undefined
@@ -837,7 +919,7 @@ describe('filtering a snapshot', () => {
   });
 
   it('does not push down a filter that cannot be translated exactly', async () => {
-    const dap = new FakeDap(weatherTree(), () => undefined);
+    const dap = fastWeatherDap();
     const captured = await captureCollection(captureRequest(dap, { options: { ...options, maxRows: 3 } }));
 
     const outcome = await filterCollection(filterRequest(dap, captured, 'x => like(x.City, "S%")'));
@@ -851,7 +933,7 @@ describe('filtering a snapshot', () => {
   });
 
   it('falls back to the client when the pushdown request fails', async () => {
-    const dap = new FakeDap(weatherTree(), (expression) =>
+    const dap = fastWeatherDap((expression) =>
       expression.includes('Enumerable.Where')
         ? { ok: false, error: 'the expression evaluator does not support lambda expressions' }
         : undefined
@@ -865,7 +947,7 @@ describe('filtering a snapshot', () => {
   });
 
   it('resolves free identifiers through the debugger', async () => {
-    const dap = new FakeDap(weatherTree(), (expression) =>
+    const dap = fastWeatherDap((expression) =>
       expression === 'threshold' ? { ok: true, result: '20' } : undefined
     );
     const snapshot = await captureCollection(captureRequest(dap));
@@ -880,7 +962,7 @@ describe('filtering a snapshot', () => {
   });
 
   it('rejects a filter with a syntax error', async () => {
-    const dap = new FakeDap(weatherTree(), () => undefined);
+    const dap = fastWeatherDap();
     const snapshot = await captureCollection(captureRequest(dap));
 
     await assert.rejects(
@@ -890,7 +972,7 @@ describe('filtering a snapshot', () => {
   });
 
   it('warns when the window is incomplete and pushdown is disabled', async () => {
-    const dap = new FakeDap(weatherTree(), () => undefined);
+    const dap = fastWeatherDap();
     const captured = await captureCollection(captureRequest(dap, { options: { ...options, maxRows: 3 } }));
 
     const outcome = await filterCollection(
@@ -905,7 +987,7 @@ describe('filtering a snapshot', () => {
   });
 
   it('keeps every fetched row when the filter is cleared', async () => {
-    const dap = new FakeDap(weatherTree(), () => undefined);
+    const dap = fastWeatherDap();
     const snapshot = await captureCollection(captureRequest(dap));
 
     const outcome = await filterCollection(filterRequest(dap, snapshot, '   '));
@@ -916,7 +998,7 @@ describe('filtering a snapshot', () => {
   });
 
   it('accepts an F# style lambda over the same collection', async () => {
-    const dap = new FakeDap(weatherTree(), () => undefined);
+    const dap = fastWeatherDap();
     const snapshot = await captureCollection(captureRequest(dap));
 
     const outcome = await filterCollection(
@@ -971,11 +1053,8 @@ describe('helper plumbing', () => {
   it('resolves the bundled helper per provider', () => {
     assert.equal(helperRelativePath('csharp'), 'dotnet/dist/ExploringCollections.Helper.dll');
     assert.equal(helperRelativePath('fsharp'), 'dotnet/dist/ExploringCollections.Helper.dll');
-    assert.equal(helperRelativePath('python'), 'python/exploring_collections_helper.py');
-    assert.equal(helperRelativePath('go'), 'go/exploring_collections.go');
-    assert.equal(helperRelativePath('rust'), 'rust/exploring_collections.rs');
-    assert.equal(helperRelativePath('cpp'), 'cc/exploring_collections.h');
-    assert.equal(helperRelativePath('c'), 'cc/exploring_collections.h');
+    assert.equal(helperRelativePath('javascript'), '');
+    assert.equal(helperRelativePath('python'), '');
   });
 
   it('unwraps quoted payloads', () => {
@@ -997,10 +1076,10 @@ describe('helper plumbing', () => {
   });
 
   it('recognizes indexed child names across languages', () => {
-    for (const name of ['[0]', '0', '[12]', '007']) {
+    for (const name of ['[0]', '0', '[12]', '007', '[12] [string]']) {
       assert.equal(isIndexedName(name), true, name);
     }
-    for (const name of ['City', 'Count', 'first', '[-1]']) {
+    for (const name of ['City', 'Count', 'first', '[-1]', '[More]']) {
       assert.equal(isIndexedName(name), false, name);
     }
   });
@@ -1031,12 +1110,12 @@ describe('snapshot metadata', () => {
   it('carries the session, provider and provider notes', async () => {
     const dap = new FakeDap(weatherTree(), () => undefined);
 
-    const snapshot = await captureCollection(captureRequest(dap));
+    const snapshot = await captureCollection(jsCaptureRequest(dap));
 
     assert.equal(snapshot.id.startsWith('snap-'), true);
-    assert.equal(snapshot.providerId, 'csharp');
-    assert.equal(snapshot.language, 'csharp');
-    assert.equal(snapshot.sessionId, 'session-1');
+    assert.equal(snapshot.providerId, 'javascript');
+    assert.equal(snapshot.language, 'javascript');
+    assert.equal(snapshot.sessionId, 'session-js');
     assert.equal(snapshot.expression, 'temperatures');
     assert.ok(snapshot.diagnostics.notes.length > 0);
     assert.ok(snapshot.diagnostics.durationMs >= 0);
@@ -1046,8 +1125,8 @@ describe('snapshot metadata', () => {
   it('produces a stable id for the same session and expression', async () => {
     const dap = new FakeDap(weatherTree(), () => undefined);
 
-    const first = await captureCollection(captureRequest(dap));
-    const second = await captureCollection(captureRequest(dap));
+    const first = await captureCollection(jsCaptureRequest(dap));
+    const second = await captureCollection(jsCaptureRequest(dap));
 
     assert.equal(first.id, second.id);
   });

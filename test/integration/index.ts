@@ -381,38 +381,53 @@ export async function run(): Promise<void> {
       );
     });
 
-    await test('a collection far bigger than the walk can afford is captured in bounded time', async () => {
+    await test('all 50000 elements of a big collection reach the viewer', async () => {
       const variable = variables.find((candidate) => candidate.name === 'employees');
       assert.ok(
         variable,
         `the big collection must be in scope, saw: ${variables.map((entry) => entry.name).join(', ')}`
       );
 
-      const before = webviewTabs().length;
-      const started = Date.now();
-      await vscode.commands.executeCommand('exploringCollections.explore', {
-        sessionId: session.id,
-        variable
-      });
-      const elapsed = Date.now() - started;
+      const settings = vscode.workspace.getConfiguration('exploringCollections');
+      // A window big enough for the whole collection, and a time budget that
+      // only covers a few dozen walked rows: the pages must not depend on it.
+      await settings.update('maxRows', 60000, vscode.ConfigurationTarget.Workspace);
+      await settings.update('captureBudgetMs', 3000, vscode.ConfigurationTarget.Workspace);
+      try {
+        const before = webviewTabs().length;
+        const started = Date.now();
+        await vscode.commands.executeCommand('exploringCollections.explore', {
+          sessionId: session.id,
+          variable
+        });
+        const elapsed = Date.now() - started;
 
-      await waitFor('the panel of the big collection', () =>
-        webviewTabs().length > before ? webviewTabs() : undefined,
-        60000
-      );
-      console.log(`      diagnostics: capturing 20000 elements took ${elapsed} ms`);
+        await waitFor('the panel of the big collection', () =>
+          webviewTabs().length > before ? webviewTabs() : undefined,
+          60000
+        );
+        console.log(`      diagnostics: capturing 50000 elements took ${elapsed} ms`);
 
-      await vscode.commands.executeCommand('exploringCollections.showDiagnostics');
-      const report = vscode.window.activeTextEditor?.document.getText() ?? '';
-      const row = report.split('\n').find((line) => line.startsWith('| employees')) ?? '';
-      console.log(`      diagnostics: ${row.trim() || 'no row for employees'}`);
-      const cells = row.split('|').map((cell) => cell.trim());
-      const rows = Number(cells[4]);
-      const strategy = cells[3];
+        await vscode.commands.executeCommand('exploringCollections.showDiagnostics');
+        const report = vscode.window.activeTextEditor?.document.getText() ?? '';
+        const row = report.split('\n').find((line) => line.startsWith('| employees')) ?? '';
+        console.log(`      diagnostics: ${row.trim() || 'no row for employees'}`);
+        const cells = row.split('|').map((cell) => cell.trim());
+        // `| title | provider | strategy | rows | total | ms | requests |`
+        const providerName = cells[2];
+        const strategy = cells[3];
+        const rows = Number(cells[4]);
+        const total = Number(cells[5]);
 
-      assert.ok(elapsed < 60000, `the capture must not hang, it took ${elapsed} ms`);
-      assert.ok(rows >= 1000, `the viewer must show a large window, it showed ${rows} rows`);
-      assert.notEqual(strategy, 'variables-walk', `the fast path must be used, it was ${strategy}`);
+        assert.equal(providerName, 'javascript', `the sample must be read as JavaScript, got ${providerName}`);
+        assert.equal(rows, 50000, `the viewer must hold every element, it held ${rows}`);
+        assert.equal(total, 50000, `the reported total must be the collection size, it was ${total}`);
+        assert.equal(strategy, 'adapter-previews', `the preview fast path must be used, it was ${strategy}`);
+        assert.ok(elapsed < 30000, `a 50000 element capture must stay fast, it took ${elapsed} ms`);
+      } finally {
+        await settings.update('maxRows', undefined, vscode.ConfigurationTarget.Workspace);
+        await settings.update('captureBudgetMs', undefined, vscode.ConfigurationTarget.Workspace);
+      }
     });
 
     await test('the snapshot commands work on an opened panel', async () => {

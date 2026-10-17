@@ -9,7 +9,7 @@ function lower(value: string): string {
   return value.toLowerCase();
 }
 
-/** C# / LINQ dialect, used for debugger side pushdown. */
+/** C# / F# expression dialect, used for debugger side pushdown. */
 export const CSHARP_DIALECT: EmitDialect = {
   equality: '==',
   inequality: '!=',
@@ -276,94 +276,6 @@ export const JAVASCRIPT_DIALECT: EmitDialect = {
         return `String(${args[0]})`;
       case 'matches':
         return `new RegExp(${args[1]}).test(${args[0]})`;
-      default:
-        return undefined;
-    }
-  }
-};
-
-/** Python dialect. */
-export const PYTHON_DIALECT: EmitDialect = {
-  equality: '==',
-  inequality: '!=',
-  and: 'and',
-  or: 'or',
-  not: 'not ',
-  nullLiteral: 'None',
-  booleanLiteral: (value) => (value ? 'True' : 'False'),
-  unsupported: new Set(['like', 'ilike']),
-  method: (receiver, name, args) => {
-    switch (lower(name)) {
-      case 'tolower':
-      case 'tolowercase':
-        return `${receiver}.lower()`;
-      case 'toupper':
-      case 'touppercase':
-        return `${receiver}.upper()`;
-      case 'trim':
-        return `${receiver}.strip()`;
-      case 'contains':
-      case 'includes':
-        return `(${args[0]} in ${receiver})`;
-      case 'startswith':
-        return `${receiver}.startswith(${args[0]})`;
-      case 'endswith':
-        return `${receiver}.endswith(${args[0]})`;
-      case 'indexof':
-        return `${receiver}.find(${args[0]})`;
-      case 'length':
-      case 'count':
-        return `len(${receiver})`;
-      case 'any':
-        return `(len(${receiver}) > 0)`;
-      case 'tostring':
-        return `str(${receiver})`;
-      default:
-        return undefined;
-    }
-  },
-  call: (name, args) => {
-    switch (lower(name)) {
-      case 'isnull':
-        return `(${args[0]} is None)`;
-      case 'isnotnull':
-        return `(${args[0]} is not None)`;
-      case 'isempty':
-        return `(len(${args[0]}) == 0)`;
-      case 'len':
-      case 'length':
-      case 'count':
-        return `len(${args[0]})`;
-      case 'lower':
-      case 'lowercase':
-        return `${args[0]}.lower()`;
-      case 'upper':
-      case 'uppercase':
-        return `${args[0]}.upper()`;
-      case 'trim':
-        return `${args[0]}.strip()`;
-      case 'contains':
-        return `(${args[1]} in ${args[0]})`;
-      case 'startswith':
-        return `${args[0]}.startswith(${args[1]})`;
-      case 'endswith':
-        return `${args[0]}.endswith(${args[1]})`;
-      case 'abs':
-        return `abs(${args[0]})`;
-      case 'round':
-        return `round(${args.join(', ')})`;
-      case 'floor':
-        return `__import__('math').floor(${args[0]})`;
-      case 'ceil':
-        return `__import__('math').ceil(${args[0]})`;
-      case 'sqrt':
-        return `__import__('math').sqrt(${args[0]})`;
-      case 'pow':
-        return `(${args[0]} ** ${args[1]})`;
-      case 'string':
-        return `str(${args[0]})`;
-      case 'matches':
-        return `bool(__import__('re').match(${args[1]}, ${args[0]}))`;
       default:
         return undefined;
     }

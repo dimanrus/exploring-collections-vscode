@@ -3,6 +3,7 @@ import { analyzeAdapterText, unquote, type FormatOptions } from '../model/format
 import { classifyAdapterVariable, kindFromAdapterValue, normalizeTypeName } from '../model/valueKind';
 import type { ElementNode, FieldNode } from '../model/snapshotBuilder';
 import { collapseWhitespace, truncate } from '../util/text';
+import { parsePreviewObject, type ParsedPreview, type PreviewPrimitive } from '../model/previewParser';
 import { mapPool } from '../util/asyncPool';
 import type { DapClient } from '../debug/dapClient';
 import type { Logger } from '../util/logging';
@@ -53,6 +54,14 @@ const NESTED_SEQUENCE_LIMIT = 32;
 /** Above this element count nested flattening is skipped to bound requests. */
 const DEEP_FLATTEN_ELEMENT_LIMIT = 250;
 
+/**
+ * How many elements may still be expanded through the adapter while the walk
+ * tries to build rows from previews. A preview that does not parse costs one
+ * request per element, so a collection whose previews are mostly unusable must
+ * not turn the cheap path into a slow one.
+ */
+export const PREVIEW_EXPANSION_LIMIT = 128;
+
 /** Elements asked for in one `variables` page while enumerating a collection. */
 const ROOT_PAGE_SIZE = 1024;
 
@@ -102,6 +111,8 @@ export interface WalkResult {
   declaredChildren: number | null;
   /** Children the adapter actually handed over. */
   readChildren: number;
+  /** Rows built from the adapter preview without expanding them. */
+  previewRows: number;
 }
 
 export interface WalkContext {
@@ -114,6 +125,12 @@ export interface WalkContext {
   onProgress?: (rows: number, total: number) => void;
   /** Wall clock deadline of the capture, in milliseconds since the epoch. */
   deadline?: number;
+  /** Build rows from complete adapter previews instead of expanding each element. */
+  expandPreviews?: boolean;
+  /** Counters filled in by {@link materializeElements}. */
+  previewStats?: { parsed: number; expanded: number };
+  /** Root children already fetched, e.g. by {@link previewsDescribeElements}. */
+  prefetchedChildren?: readonly AdapterVariable[];
 }
 
 /**
@@ -131,9 +148,14 @@ function deadlineToken(
   };
 }
 
-/** True when the child name looks like a positional index. */
+/**
+ * True when the child name looks like a positional index.
+ *
+ * Some adapters append the type to the name (`[0] [string]` in vsdbg), so a
+ * trailing suffix is accepted.
+ */
 export function isIndexedName(name: string): boolean {
-  return /^\[\d+\]$/.test(name) || /^\d+$/.test(name);
+  return /^\[\d+\](?:\s|$)/.test(name) || /^\d+$/.test(name);
 }
 
 /**
@@ -145,11 +167,20 @@ export function countFromPreview(preview: string | undefined): number | undefine
   if (!preview) {
     return undefined;
   }
-  const patterns = [/^\((\d+)\)/, /\b(\d+)\s+items?\b/i, /\b(?:len|length|count)\s*[:=]\s*(\d+)/i];
+  const trimmed = preview.trim();
+  // Anchored patterns on purpose: a record preview such as `{Count: 3, Name: …}`
+  // mentions `Count` as a member and must not be read as a collection size.
+  const patterns = [
+    /^\((\d+)\)/,
+    /^Array\((\d+)\)/,
+    /^(?:Map|Set|WeakMap|WeakSet)\((\d+)\)/,
+    /^(\d+)\s+items?\b/i,
+    /^(?:count|len|length|size)\s*=\s*([\d,]+)$/i
+  ];
   for (const pattern of patterns) {
-    const match = pattern.exec(preview);
+    const match = pattern.exec(trimmed);
     if (match) {
-      const parsed = Number(match[1]);
+      const parsed = Number((match[1] as string).replace(/,/g, ''));
       if (Number.isFinite(parsed) && parsed > 0) {
         return parsed;
       }
@@ -159,19 +190,33 @@ export function countFromPreview(preview: string | undefined): number | undefine
 }
 
 /**
- * Number of children a variable has, as far as the adapter tells us: the real
- * counters first, then the count embedded in the preview text. Without the
- * preview fallback an adapter that reports no counters (vsdbg does that for
- * `List<T>`) looks like an empty collection and its window is cut silently.
+ * Element count of a variable, as far as the adapter tells us: the counters
+ * first, then the count embedded in the preview text. Without the preview
+ * fallback an adapter that reports no counters (vsdbg does that for `List<T>`)
+ * looks like an empty collection and its window is cut silently.
+ *
+ * The counters are not added together: an indexed collection reports its
+ * elements in `indexedVariables` and its members (`length`, custom properties)
+ * in `namedVariables`, so an array of 50,000 elements arrives as 50,000 + 1.
+ * Summing them reported one element too many and marked every complete capture
+ * as truncated.
  */
 export function declaredCountOf(
   variable: Pick<AdapterVariable, 'indexedVariables' | 'namedVariables' | 'value'>
 ): number | undefined {
-  const declared = (variable.indexedVariables ?? 0) + (variable.namedVariables ?? 0);
-  if (declared > 0) {
-    return declared;
+  const indexed = variable.indexedVariables ?? 0;
+  if (indexed > 0) {
+    return indexed;
   }
-  return countFromPreview(variable.value);
+  const named = variable.namedVariables ?? 0;
+  const preview = countFromPreview(variable.value);
+  // `namedVariables` may count members (`Count`, `Capacity`, raw view) instead
+  // of elements: vsdbg reports `namedVariables = 1` for a `List<T>` whose real
+  // size is only in `Count = 1000`. The larger of the two wins.
+  if (preview !== undefined && preview > named) {
+    return preview;
+  }
+  return named > 0 ? named : preview;
 }
 
 function isExcluded(name: string, excluded: readonly string[]): boolean {
@@ -258,6 +303,37 @@ function containerLeaf(
     childCount: childCountOf(variable) || undefined,
     typeName: variable.type
   };
+}
+
+/** Converts one preview member into a column value. */
+function fieldFromPreview(name: string, value: PreviewPrimitive): FieldNode {
+  const path = [name];
+  if (value === null) {
+    return { name, path, text: '', kind: 'null', isNull: true };
+  }
+  if (typeof value === 'number') {
+    if (Number.isFinite(value)) {
+      return { name, path, text: String(value), kind: 'number' };
+    }
+    // NaN and the infinities have no numeric cell representation.
+    return { name, path, text: String(value), kind: 'string' };
+  }
+  if (typeof value === 'boolean') {
+    return { name, path, text: value ? 'true' : 'false', kind: 'boolean' };
+  }
+  return { name, path, text: value, kind: kindFromAdapterValue(undefined, value) };
+}
+
+/** Builds the fields of an element from its complete adapter preview. */
+function fieldsFromPreview(preview: ParsedPreview, context: WalkContext): FieldNode[] {
+  const fields: FieldNode[] = [];
+  for (const [name, value] of Object.entries(preview)) {
+    if (isExcluded(name, context.options.excludedMembers)) {
+      continue;
+    }
+    fields.push(fieldFromPreview(name, value));
+  }
+  return fields;
 }
 
 /**
@@ -356,6 +432,43 @@ async function materializeElements(
             }
           ]
         } satisfies ElementNode;
+      }
+
+      if (context.expandPreviews) {
+        const parsed = parsePreviewObject(child.value);
+        if (parsed) {
+          const previewFields = fieldsFromPreview(parsed, context);
+          if (previewFields.length > 0) {
+            if (context.previewStats) {
+              context.previewStats.parsed += 1;
+            }
+            return {
+              label,
+              typeName: child.type,
+              valueText: preview.text,
+              variablesReference: child.variablesReference,
+              evaluateName: child.evaluateName,
+              childCount: childCountOf(child) || undefined,
+              fields: previewFields
+            } satisfies ElementNode;
+          }
+        }
+        if (context.previewStats) {
+          context.previewStats.expanded += 1;
+          if (context.previewStats.expanded > PREVIEW_EXPANSION_LIMIT) {
+            // Stop paying one request per element; the caller sees that not
+            // every row came from a preview and uses another strategy.
+            return {
+              label,
+              typeName: child.type,
+              valueText: preview.text,
+              variablesReference: child.variablesReference,
+              evaluateName: child.evaluateName,
+              childCount: childCountOf(child) || undefined,
+              fields: [containerLeaf(child, label, ['value'], formatOptions)]
+            } satisfies ElementNode;
+          }
+        }
       }
 
       const fields = await materializeFields(child, depth, [], context);
@@ -475,6 +588,48 @@ function childKey(variable: AdapterVariable): string {
 }
 
 /**
+ * Checks, with one `variables` request, whether the adapter describes the
+ * elements themselves in their preview text.
+ *
+ * When it does, a whole collection can be materialized from that one response
+ * instead of asking for every element separately — which is what makes a
+ * 50,000 element array readable in seconds rather than minutes.
+ */
+export async function previewsDescribeElements(
+  root: WalkRoot,
+  context: WalkContext,
+  sampleSize = 8
+): Promise<{ usable: boolean; children: readonly AdapterVariable[] }> {
+  const unusable = { usable: false, children: [] as readonly AdapterVariable[] };
+  if (root.variablesReference <= 0) {
+    return unusable;
+  }
+  const dapOptions = {
+    timeoutMs: context.options.timeoutMs,
+    token: context.options.token
+  };
+  if (!context.budget.consume()) {
+    return unusable;
+  }
+  try {
+    const page = await context.client.variables(
+      { reference: root.variablesReference, start: 0, count: sampleSize },
+      dapOptions
+    );
+    const expandable = page.filter((child) => child.variablesReference > 0).slice(0, sampleSize);
+    if (expandable.length === 0) {
+      // Every child is a leaf: the walk already reads those from their previews.
+      return { usable: page.length > 0, children: page };
+    }
+    const usable = expandable.every((child) => parsePreviewObject(child.value) !== undefined);
+    return { usable, children: page };
+  } catch (error) {
+    context.logger.debug(`could not probe adapter previews: ${String(error)}`);
+    return unusable;
+  }
+}
+
+/**
  * The universal capture path: enumerate the object graph through the DAP
  * `variables` request only. Works with every debug adapter, at the cost of
  * one round trip per expanded container.
@@ -485,10 +640,12 @@ export async function walkVariables(root: WalkRoot, provided: WalkContext): Prom
   // thousand elements cannot be read in one go; the budget keeps a capture
   // bounded and the partial window is reported instead of hanging the viewer.
   const deadline = Date.now() + Math.max(1, provided.options.captureBudgetMs ?? 30000);
+  const previewStats = provided.previewStats ?? { parsed: 0, expanded: 0 };
   const context: WalkContext = {
     ...provided,
     options: { ...provided.options, token: deadlineToken(provided.options.token, deadline) },
-    deadline
+    deadline,
+    previewStats
   };
   const { options } = context;
 
@@ -500,7 +657,8 @@ export async function walkVariables(root: WalkRoot, provided: WalkContext): Prom
       warnings: ['The selected variable has no expandable children.'],
       budgetExhausted: false,
       declaredChildren: null,
-      readChildren: 0
+      readChildren: 0,
+      previewRows: 0
     };
   }
 
@@ -511,7 +669,11 @@ export async function walkVariables(root: WalkRoot, provided: WalkContext): Prom
 
   // First pass: enumerate the direct children of the expression to decide
   // whether we are dealing with a sequence or with a single record.
-  const enumeration = await fetchRootChildren(root.variablesReference, limit, declaredCount, context);
+  const prefetched = provided.prefetchedChildren;
+  const enumeration =
+    prefetched && prefetched.length > 0
+      ? { children: prefetched.slice(0, limit), ignoredStart: false }
+      : await fetchRootChildren(root.variablesReference, limit, declaredCount, context);
 
   if (enumeration.children.length === 0) {
     return {
@@ -521,7 +683,8 @@ export async function walkVariables(root: WalkRoot, provided: WalkContext): Prom
       warnings: ['The debug adapter returned no children for this variable.'],
       budgetExhausted: false,
       declaredChildren: declaredCount,
-      readChildren: 0
+      readChildren: 0,
+      previewRows: 0
     };
   }
 
@@ -561,7 +724,8 @@ export async function walkVariables(root: WalkRoot, provided: WalkContext): Prom
         warnings,
         budgetExhausted: context.budget.exhausted,
         declaredChildren: declaredCount,
-        readChildren: sequence.length
+        readChildren: sequence.length,
+        previewRows: previewStats.parsed
       };
     }
 
@@ -573,7 +737,8 @@ export async function walkVariables(root: WalkRoot, provided: WalkContext): Prom
         warnings: ['The variable exposes no data members.'],
         budgetExhausted: context.budget.exhausted,
         declaredChildren: declaredCount,
-        readChildren: children.length
+        readChildren: children.length,
+        previewRows: previewStats.parsed
       };
     }
 
@@ -603,7 +768,8 @@ export async function walkVariables(root: WalkRoot, provided: WalkContext): Prom
         warnings,
         budgetExhausted: context.budget.exhausted,
         declaredChildren: declaredCount,
-        readChildren: children.length
+        readChildren: children.length,
+        previewRows: previewStats.parsed
       };
     }
 
@@ -640,7 +806,8 @@ export async function walkVariables(root: WalkRoot, provided: WalkContext): Prom
       warnings,
       budgetExhausted: context.budget.exhausted,
       declaredChildren: declaredCount,
-      readChildren: children.length
+      readChildren: children.length,
+      previewRows: previewStats.parsed
     };
   }
 }

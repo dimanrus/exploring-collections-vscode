@@ -16,12 +16,7 @@ import {
   unresolvedIdentifiers
 } from '../src/filter/evaluator';
 import { emitBody } from '../src/filter/emit';
-import {
-  CSHARP_DIALECT,
-  FSHARP_DIALECT,
-  JAVASCRIPT_DIALECT,
-  PYTHON_DIALECT
-} from '../src/filter/dialects';
+import { CSHARP_DIALECT, FSHARP_DIALECT, JAVASCRIPT_DIALECT } from '../src/filter/dialects';
 import type { ColumnDescriptor, RowDescriptor } from '../src/model/types';
 
 function columns(...specs: Array<[string, ColumnDescriptor['kind']]>): ColumnDescriptor[] {
@@ -221,7 +216,7 @@ describe('filter emission for pushdown', () => {
     return emitBody(body, { sourceParameter: parsed.parameter ?? 'x', targetParameter: 'x', dialect });
   };
 
-  it('emits C# operators and LINQ friendly helpers', () => {
+  it('emits C# operators and collection helpers', () => {
     const result = emit('x => x.City == "Seoul" && len(x.City) > 2');
     assert.equal(result.text, '(x.City == "Seoul") && (System.Linq.Enumerable.Count(x.City) > 2)');
     assert.equal(result.exact, true);
@@ -241,12 +236,6 @@ describe('filter emission for pushdown', () => {
   it('emits JavaScript strict equality and method names', () => {
     const result = emit('x => x.City.Contains("Se") && x.Feels == "warm"', JAVASCRIPT_DIALECT);
     assert.equal(result.text, 'x.City.includes("Se") && (x.Feels === "warm")');
-    assert.equal(result.exact, true);
-  });
-
-  it('emits Python operators and membership tests', () => {
-    const result = emit('x => x.City.Contains("Se") && x.Feels == "warm"', PYTHON_DIALECT);
-    assert.equal(result.text, '("Se" in x.City) and (x.Feels == "warm")');
     assert.equal(result.exact, true);
   });
 

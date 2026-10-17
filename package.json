@@ -46,7 +46,6 @@
     "dataframe",
     "dictionary",
     "enumerable",
-    "linq",
     "filter",
     "export",
     "chart",
@@ -54,16 +53,11 @@
     "json",
     "excel",
     "xml",
-    "pandas",
     "csharp",
     "dotnet",
     "fsharp",
     "javascript",
-    "typescript",
-    "python",
-    "go",
-    "rust",
-    "cpp"
+    "typescript"
   ],
   "main": "./dist/extension.js",
   "l10n": "./l10n",
@@ -382,11 +376,6 @@
           "minimum": 1000,
           "maximum": 600000,
           "markdownDescription": "%configuration.timeoutMs.description%"
-        },
-        "exploringCollections.enableLanguageHelpers": {
-          "type": "boolean",
-          "default": true,
-          "markdownDescription": "%configuration.enableLanguageHelpers.description%"
         },
         "exploringCollections.enableFilterPushdown": {
           "type": "boolean",

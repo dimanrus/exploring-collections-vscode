@@ -40,56 +40,8 @@ describe('literal preview: lists of records', () => {
     assert.equal(found.rows.length, 2);
   });
 
-  it('reads a Python list of dictionaries with comments and a trailing comma', () => {
-    const source = [
-      '# fixtures',
-      'temperatures = [',
-      '    {"city": "Seoul", "degrees": 21},  # capital',
-      '    {"city": "Busan", "degrees": 24},',
-      ']'
-    ].join('\n');
 
-    const [found] = literals(source, 'python');
-    assert.ok(found);
-    assert.equal(found.name, 'temperatures');
-    assert.equal(found.line, 1);
-    assert.deepEqual(found.rows[0], { city: 'Seoul', degrees: 21 });
-  });
 
-  it('reads a Go slice literal built from anonymous structs', () => {
-    const source = [
-      'func main() {',
-      '\ttemps := []Temperature{',
-      '\t\t{City: "Seoul", Degrees: 21},',
-      '\t\t{City: "Busan", Degrees: 24},',
-      '\t}',
-      '\t_ = temps',
-      '}'
-    ].join('\n');
-
-    const [found] = literals(source, 'go');
-    assert.ok(found);
-    assert.equal(found.name, 'temps');
-    assert.equal(found.rows.length, 2);
-    assert.deepEqual(found.rows[1], { City: 'Busan', Degrees: 24 });
-  });
-
-  it('reads a Rust vec! of struct literals', () => {
-    const source = [
-      'fn main() {',
-      '    let temps = vec![',
-      '        Temperature { celsius: 21.5 },',
-      '        Temperature { celsius: 24.0 },',
-      '    ];',
-      '}'
-    ].join('\n');
-
-    const [found] = literals(source, 'rust');
-    assert.ok(found);
-    assert.equal(found.name, 'temps');
-    assert.equal(found.rows.length, 2);
-    assert.deepEqual(found.rows[0], { celsius: 21.5 });
-  });
 
   it('reads an F# list of records', () => {
     const source = [
@@ -139,19 +91,6 @@ describe('literal preview: lists of records', () => {
     );
   });
 
-  it('reads a C++ vector initializer', () => {
-    const source = [
-      'int main() {',
-      '  std::vector<int> values = { 10, 20, 30 };',
-      '  return 0;',
-      '}'
-    ].join('\n');
-
-    const [found] = literals(source, 'cpp');
-    assert.ok(found);
-    assert.equal(found.name, 'values');
-    assert.equal(found.rows.length, 3);
-  });
 });
 
 describe('literal preview: maps and records', () => {
@@ -244,15 +183,6 @@ describe('literal preview: values', () => {
     assert.equal(found.unknownValues, 0);
   });
 
-  it('reads Python None, True and triple quoted strings', () => {
-    const source = ['values = [None, True, False, """multi', 'line""", \'single\']'].join('\n');
-    const [found] = literals(source, 'python');
-    assert.ok(found);
-    assert.deepEqual(
-      found.rows.map((row) => row.value),
-      [null, true, false, 'multi\nline', 'single']
-    );
-  });
 
   it('reads C# verbatim strings', () => {
     const source = 'var paths = new[] { @"C:\\temp", "plain" };';

@@ -136,7 +136,6 @@ export interface LocalizedStrings {
     filterValueTo: string;
     matchAll: string;
     matchAny: string;
-    valueRequired: string;
     filterOperators: Record<string, string>;
     rowPosition: string;
     copyCell: string;

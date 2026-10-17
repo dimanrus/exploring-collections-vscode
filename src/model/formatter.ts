@@ -22,6 +22,9 @@ const STRING_ESCAPES: Readonly<Record<string, string>> = {
   '\\n': '\n',
   '\\r': '\r',
   '\\t': '\t',
+  '\\b': '\b',
+  '\\f': '\f',
+  '\\v': '\v',
   '\\"': '"',
   "\\'": "'",
   '\\\\': '\\',
@@ -37,7 +40,11 @@ export function unquote(text: string): string {
   const first = trimmed[0];
   const last = trimmed[trimmed.length - 1];
   if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
-    return trimmed.slice(1, -1).replace(/\\(?:[nrt"'\\0])/g, (match) => STRING_ESCAPES[match] ?? match);
+    return trimmed
+      .slice(1, -1)
+      .replace(/\\(?:u([0-9a-fA-F]{4})|[nrtbfv"'\\0])/g, (match, code: string | undefined) =>
+        code ? String.fromCharCode(Number.parseInt(code, 16)) : (STRING_ESCAPES[match] ?? match)
+      );
   }
   return trimmed;
 }

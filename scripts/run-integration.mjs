@@ -33,7 +33,7 @@ function main() {
   const temperatures = buildTemperatures();
   const lookup = { cityCount: cities.length, sampleCount: temperatures.length };
   // A collection the variables walk cannot afford to read element by element.
-  const employees = Array.from({ length: 20000 }, (_, id) => ({
+  const employees = Array.from({ length: 50000 }, (_, id) => ({
     id,
     name: 'Emp' + id,
     salary: 10 + (id % 80),

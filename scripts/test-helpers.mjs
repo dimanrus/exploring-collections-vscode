@@ -2,15 +2,8 @@
 /**
  * Runs the self tests of every bundled helper.
  *
- * Each helper has its own test suite so it can be verified without the editor:
- *   .NET     -> helpers/dotnet/tests            (dotnet)
- *   Python   -> helpers/python/test_helper.py   (python3)
- *   Go       -> helpers/go                      (go test)
- *   Rust     -> helpers/rust                    (cargo test)
- *   C/C++    -> helpers/cc/build_and_test.sh    (gcc/g++)
- *
- * A missing toolchain is reported as skipped rather than failing the run, so the
- * script is usable on machines that only have some of the languages installed.
+ * The .NET helper has its own test suite so it can be verified without the
+ * editor. A missing toolchain is reported as skipped rather than failing the run.
  */
 import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
@@ -35,34 +28,6 @@ const suites = [
     command: 'dotnet',
     args: ['run', '-c', 'Release', '--nologo'],
     cwd: resolve(root, 'helpers/dotnet/tests')
-  },
-  {
-    name: 'Python helper',
-    tool: 'python3',
-    command: 'python3',
-    args: ['helpers/python/test_helper.py'],
-    cwd: root
-  },
-  {
-    name: 'Go helper',
-    tool: 'go',
-    command: 'go',
-    args: ['test', './...'],
-    cwd: resolve(root, 'helpers/go')
-  },
-  {
-    name: 'Rust helper',
-    tool: 'cargo',
-    command: 'cargo',
-    args: ['test', '--offline'],
-    cwd: resolve(root, 'helpers/rust')
-  },
-  {
-    name: 'C/C++ helper',
-    tool: 'bash',
-    command: 'bash',
-    args: ['helpers/cc/build_and_test.sh'],
-    cwd: root
   }
 ];
 

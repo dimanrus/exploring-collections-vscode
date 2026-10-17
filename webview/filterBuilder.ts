@@ -9,7 +9,7 @@ import { clear, el, icon } from './dom';
  * The viewer's own controls (search, per column filters, sorting) only ever see
  * the rows that were fetched. This builder instead produces a condition that is
  * applied to the whole collection: the extension translates it into the debugger's
- * own language when it can (LINQ, `Seq.filter`, `Array.filter`, a list
+ * own language when it can (`.Where`, `Seq.filter`, `Array.filter`, a list
  * comprehension), so a truncated collection can be searched beyond its window.
  */
 
@@ -482,7 +482,6 @@ export interface FilterBuilderStrings {
   apply: string;
   clear: string;
   cancel: string;
-  valueRequired: string;
   wholeCollection: string;
   partialHint: string;
   operators: Record<FilterOperator, string>;
@@ -540,8 +539,11 @@ export function renderFilterBuilder(options: {
   const refreshPreview = (): void => {
     const text = buildFilterText(draft.conditions, draft.combinator, columns);
     if (previewNode) {
-      previewNode.textContent = text.length > 0 ? text : strings.valueRequired;
+      previewNode.textContent = text;
       previewNode.title = text;
+      // Nothing to preview until the condition is complete; an empty code box
+      // looks like a disabled input, so it stays out of the way instead.
+      previewNode.hidden = text.length === 0;
     }
     if (applyButton) {
       applyButton.disabled = text.length === 0;
@@ -679,7 +681,7 @@ export function renderFilterBuilder(options: {
     });
     footer.appendChild(add);
 
-    previewNode = el('code', { class: 'filter-preview' });
+    previewNode = el('code', { class: 'filter-preview', hidden: true });
     footer.appendChild(previewNode);
 
     const buttons = el('div', { class: 'popover-buttons' });

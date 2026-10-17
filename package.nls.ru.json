@@ -1,6 +1,6 @@
 {
   "extension.displayName": "Exploring Collections",
-  "extension.description": "Просмотр, фильтрация, сортировка, графики и экспорт коллекций во время отладки. Коллекции и DataTable как таблицы в отладчике — для C#, F#, JavaScript, TypeScript, Python, Go, Rust, C и C++.",
+  "extension.description": "Просмотр, фильтрация, сортировка, графики и экспорт коллекций во время отладки. Коллекции и DataTable как таблицы в отладчике — для C#, F#, JavaScript и TypeScript.",
   "capabilities.virtualWorkspaces.description": "Для отладки и чтения коллекций требуется локальный сеанс отладки.",
   "capabilities.untrustedWorkspaces.description": "Расширение вычисляет выражения в отлаживаемом процессе и записывает файлы экспорта, поэтому в недоверенных рабочих областях его возможности ограничены.",
   "command.category": "Exploring Collections",
@@ -23,13 +23,12 @@
   "view.explorer.name": "Коллекции",
   "view.explorer.welcome": "Коллекций пока нет.\n\nЗапустите отладку, остановитесь на точке останова, затем щёлкните правой кнопкой по переменной-коллекции в представлении **Run and Debug** и выберите **Исследовать коллекцию**.\n\n[Выбрать коллекцию для исследования](command:exploringCollections.pickAndExplore)\n\nТакже можно нажать `Ctrl+Alt+E` (macOS: `Cmd+Alt+E`) во время отладки.",
   "configuration.title": "Exploring Collections",
-  "configuration.maxRows.description": "Максимальное количество элементов, читаемых из коллекции. Большие значения увеличивают нагрузку на отладчик.",
+  "configuration.maxRows.description": "Максимальное количество элементов, читаемых из коллекции. Задайте не меньше размера коллекции, чтобы увидеть все строки; большие значения увеличивают нагрузку на отладчик.",
   "configuration.pageSize.description": "Количество строк на странице в представлении коллекции по умолчанию.",
   "configuration.maxDepth.description": "Сколько уровней вложенных контейнеров разворачивается в колонки. Более глубокие уровни остаются раскрываемыми в панели значений.",
   "configuration.fetchConcurrency.description": "Число одновременных запросов `variables` к адаптеру отладки.",
   "configuration.timeoutMs.description": "Тайм-аут одного запроса к адаптеру отладки в миллисекундах.",
-  "configuration.enableLanguageHelpers.description": "Разрешить расширению загружать свой хелпер в отлаживаемый процесс для более быстрой и полной сериализации (например, сборку-хелпер для .NET).",
-  "configuration.enableFilterPushdown.description": "Передавать фильтры в отладчик как LINQ, чтобы совпадать могли элементы за пределами загруженного окна.",
+  "configuration.enableFilterPushdown.description": "Передавать фильтры в отладчик как нативные выражения, чтобы совпадать могли элементы за пределами загруженного окна.",
   "configuration.enableCharts.description": "Включить построение графиков девяти типов.",
   "configuration.showInlineHints.description": "Показывать однострочную подсказку рядом с остановившейся строкой со списком коллекций текущего кадра.",
   "configuration.showCodeLens.description": "Показывать CodeLens `Explore collection` над каждой коллекцией, доступной в текущем кадре на точке останова.",
@@ -41,7 +40,7 @@
   "configuration.exportDirectory.description": "Каталог по умолчанию для экспортируемых файлов. Пустое значение — первая папка рабочей области.",
   "configuration.openExportedFile.description": "Открывать экспортированный файл после успешного экспорта.",
   "configuration.dictionariesAsRows.description": "Показывать словари и отображения как одну строку на запись вместо одной строки на объект-член.",
-  "configuration.customDebugTypes.description": "Сопоставление типа отладчика языковому провайдеру, например `{ \"my-debugger\": \"python\" }`.",
+  "configuration.customDebugTypes.description": "Сопоставление типа отладчика языковому провайдеру, например `{ \"my-debugger\": \"csharp\" }`.",
   "configuration.excludedMembers.description": "Имена членов, которые никогда не становятся колонками (служебные члены отладчика, например `Count` или `Capacity`).",
-  "configuration.captureBudgetMs.description": "Сколько времени один захват может читать коллекцию по дереву переменных отладчика (адаптеру нужен один запрос на элемент). Прочитанное к этому моменту показывается с пометкой об усечении."
+  "configuration.captureBudgetMs.description": "Сколько времени обход дерева переменных в JavaScript/TypeScript может читать коллекцию (адаптеру нужен один запрос на элемент). Прочитанное к этому моменту показывается с пометкой об усечении. На быстрые пути (preview адаптера, файл помощника) этот бюджет не влияет."
 }

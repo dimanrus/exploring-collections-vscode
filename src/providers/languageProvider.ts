@@ -1,16 +1,7 @@
 import type { ElementNode } from '../model/snapshotBuilder';
 import type { FilterExpression } from '../filter/expression';
 
-export type LanguageId =
-  | 'csharp'
-  | 'fsharp'
-  | 'javascript'
-  | 'typescript'
-  | 'python'
-  | 'go'
-  | 'rust'
-  | 'cpp'
-  | 'c';
+export type LanguageId = 'csharp' | 'fsharp' | 'javascript' | 'typescript';
 
 export interface ProviderMatchContext {
   debugType: string;
@@ -23,9 +14,8 @@ export interface ProviderMatchContext {
   /** Path of the file the debugger stopped in, when known. */
   sourcePath?: string;
   /**
-   * Language of the focused editor. Many debug types are shared (cppdbg serves
-   * both C and C++), so this is used as a tie breaker, never as authority: the
-   * focused editor may be unrelated to the stopped file.
+   * Language of the focused editor. It is only a tie breaker, never authority:
+   * the focused editor may be unrelated to the stopped file.
    */
   editorLanguageId?: string;
   /** User supplied mapping of debug type to provider id. */
@@ -85,13 +75,27 @@ export interface LanguageProvider {
   readonly debugTypes: readonly string[];
   /** Debug adapters names used in diagnostics. */
   readonly adapterHints: readonly string[];
-  /** Editor language ids that disambiguate shared debug types (c/cpp/rust). */
+  /** Editor language ids that belong to the provider. */
   readonly editorLanguages: readonly string[];
   /** Limitations surfaced in the diagnostics report. */
   readonly notes: readonly string[];
 
   /** Canonical languages this provider can handle. */
   readonly languages: readonly LanguageId[];
+
+  /**
+   * True when the adapter describes an element's members in the variable
+   * preview (`{id: 1, name: 'x'}`), so rows can be built without expanding
+   * every element with its own request.
+   */
+  readonly readElementsFromPreviews?: boolean;
+
+  /**
+   * True when the language has no usable slow fallback: reading element by
+   * element is too slow to be a strategy, so a failed fast path is an error
+   * instead of a partial window.
+   */
+  readonly requiresHelper?: boolean;
 
   /**
    * True when the provider can attach to the debug type. Providers that need a
@@ -115,12 +119,8 @@ export interface LanguageProvider {
    */
   buildSerializeExpression?(source: string, options: HelperOptions): string[];
 
-  /** Alternative: call a helper compiled into the debuggee process. */
-  buildNativeHelperExpression?(source: string, options: HelperOptions): string | undefined;
-
   /**
    * Expression that loads a helper library into the debuggee once per session.
-   * Evaluated before {@link buildNativeHelperExpression}.
    */
   buildHelperLoadExpression?(helperPath: string): string | undefined;
 
@@ -137,8 +137,17 @@ export interface LanguageProvider {
     options: HelperOptions
   ): FilterTranslation | undefined;
 
-  /** Builds an expression that evaluates to a subrange of the collection. */
-  buildRangeExpression?(source: string, start: number, count: number): string | undefined;
+  /**
+   * Builds an expression that serializes a page into a local file and returns
+   * the number of characters written. Adapters truncate method results, so a
+   * file is the only transport that carries a whole collection in one request.
+   */
+  buildNativeFileExpression?(
+    source: string,
+    start: number,
+    count: number,
+    path: string
+  ): string | undefined;
 
   /** Builds an expression for a member path of the collection. */
   buildMemberExpression?(source: string, path: readonly string[]): string | undefined;
@@ -157,17 +166,6 @@ export function toLanguageId(editorLanguageId: string | undefined): LanguageId |
     case 'typescript':
     case 'typescriptreact':
       return 'typescript';
-    case 'python':
-      return 'python';
-    case 'go':
-      return 'go';
-    case 'rust':
-      return 'rust';
-    case 'cpp':
-    case 'cuda-cpp':
-      return 'cpp';
-    case 'c':
-      return 'c';
     default:
       return undefined;
   }
@@ -202,23 +200,6 @@ export function languageFromPath(path: string | undefined): LanguageId | undefin
     case '.cts':
     case '.tsx':
       return 'typescript';
-    case '.py':
-    case '.pyw':
-      return 'python';
-    case '.go':
-      return 'go';
-    case '.rs':
-      return 'rust';
-    case '.cpp':
-    case '.cc':
-    case '.cxx':
-    case '.c++':
-    case '.hpp':
-    case '.hxx':
-    case '.h':
-      return 'cpp';
-    case '.c':
-      return 'c';
     default:
       return undefined;
   }
@@ -253,8 +234,7 @@ export class LanguageProviderRegistry {
    * The debug type identifies the runtime and therefore selects the provider
    * family; within a family the language of the stopped file (then the focused
    * editor) breaks ties. Providers extend their family with `compatibleDebugTypes`
-   * when an adapter serves several languages, which is how CodeLLDB resolves to
-   * C++ for a C++ file and to Rust otherwise.
+   * when an adapter serves several languages.
    *
    * Only when no provider claims the debug type at all does the file language
    * decide on its own, which keeps brand new adapters usable.

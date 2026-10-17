@@ -31,6 +31,7 @@ import {
   type ElementNode,
   type FieldNode
 } from '../src/model/snapshotBuilder';
+import { parsePreviewObject } from '../src/model/previewParser';
 import type { SnapshotDiagnostics } from '../src/model/types';
 
 const diagnostics: SnapshotDiagnostics = {
@@ -376,5 +377,55 @@ describe('snapshot building', () => {
     assert.equal(fields[0]!.kind, 'array');
     assert.equal(fields[0]!.expandable, true);
     assert.match(fields[0]!.text, /100 items/);
+  });
+});
+
+describe('adapter preview parsing', () => {
+  it('reads a flat object preview into members', () => {
+    assert.deepEqual(parsePreviewObject("{id: 0, name: 'Emp0', salary: 10, active: true, note: null}"), {
+      id: 0,
+      name: 'Emp0',
+      salary: 10,
+      active: true,
+      note: null
+    });
+  });
+
+  it('accepts a type prefix and quoted keys', () => {
+    assert.deepEqual(parsePreviewObject(`Temperature {City: 'Seoul', 'Degree C': 21.5}`), {
+      City: 'Seoul',
+      'Degree C': 21.5
+    });
+  });
+
+  it('unwraps escaped quotes and unicode in strings', () => {
+    assert.deepEqual(parsePreviewObject(`{a: 'it\\'s', b: "line\\nbreak", c: '\\u0041'}`), {
+      a: "it's",
+      b: 'line\nbreak',
+      c: 'A'
+    });
+  });
+
+  it('keeps bigint digits and non finite numbers representable', () => {
+    assert.deepEqual(parsePreviewObject('{big: 123n, inf: Infinity, nan: NaN}'), {
+      big: '123n',
+      inf: Number.POSITIVE_INFINITY,
+      nan: Number.NaN
+    });
+  });
+
+  it('rejects a preview the adapter elided', () => {
+    assert.equal(parsePreviewObject("{id: 0, name: 'Emp0', …}"), undefined);
+    assert.equal(parsePreviewObject('{id: 0, address: {…}}'), undefined);
+    assert.equal(parsePreviewObject('{id: 0, child: [Object]}'), undefined);
+  });
+
+  it('rejects nested containers, functions and non object text', () => {
+    assert.equal(parsePreviewObject('{id: 0, tags: [1, 2]}'), undefined);
+    assert.equal(parsePreviewObject("{id: 0, address: {city: 'Seoul'}}"), undefined);
+    assert.equal(parsePreviewObject('{id: 0, fn: [Function: go]}'), undefined);
+    assert.equal(parsePreviewObject('Array(5) [{…}, {…}]'), undefined);
+    assert.equal(parsePreviewObject('Count = 50000'), undefined);
+    assert.equal(parsePreviewObject(undefined), undefined);
   });
 });

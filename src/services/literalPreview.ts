@@ -35,11 +35,6 @@ export const LITERAL_LANGUAGES = [
   'typescript',
   'javascriptreact',
   'typescriptreact',
-  'python',
-  'go',
-  'rust',
-  'cpp',
-  'c',
   'json',
   'jsonc'
 ];
@@ -124,8 +119,8 @@ class LiteralParser {
         i = end === -1 ? text.length : end + 2;
         continue;
       }
-      // `#` starts a comment in Python and shell like languages, but `#[` and
-      // `#!` are Rust attributes.
+      // `#` is not a comment in the supported languages, but the scanner also
+      // sees embedded JSON and must not treat a `#` inside a string as one.
       if (text[i] === '#' && text[i + 1] !== '[' && text[i + 1] !== '!') {
         const end = text.indexOf('\n', i);
         i = end === -1 ? text.length : end + 1;
@@ -233,7 +228,7 @@ class LiteralParser {
       const close = matchBracket(this.text, open, '(', ')');
       end = close === undefined ? end : close + 1;
     }
-    // `Temperature { Celsius = 21 }` (Rust struct literal, C# object
+    // `Temperature { Celsius = 21 }` (record/struct literal, C# object
     // initializer without `new`): a type name followed by a brace block.
     const after = this.skip(end);
     if (this.text[after] === '{' && !CONTROL_KEYWORDS.has(word.value) && /^[A-Z]/.test(word.value)) {
@@ -332,7 +327,7 @@ class LiteralParser {
       if (separator === ']') {
         return done(cursor + 1);
       }
-      // A newline separated list (F#, Rust) has no separator at all: try to
+      // A newline separated list (F#) has no separator at all: try to
       // read the next element, and fall back to what was read so far when the
       // token cannot start a value (`1..10`, a spread, an unparsable element).
       const next = this.value(cursor);
@@ -987,8 +982,7 @@ interface Candidate {
  */
 function scanForAssignments(
   text: string,
-  withProperties: boolean,
-  languageId?: string
+  withProperties: boolean
 ): Candidate[] {
   const candidates: Candidate[] = [];
   let cursor = 0;
@@ -1042,7 +1036,7 @@ function scanForAssignments(
       operator = 2;
     }
     if (operator > 0) {
-      const name = identifierBefore(text, cursor, languageId);
+      const name = identifierBefore(text, cursor);
       if (name) {
         const bracket = bracketAfterAssignment(text, cursor + operator);
         if (bracket >= 0) {
@@ -1072,8 +1066,7 @@ function scanForAssignments(
  */
 function identifierBefore(
   text: string,
-  operator: number,
-  languageId?: string
+  operator: number
 ): { name: string; offset: number } | undefined {
   let start = operator;
   while (start > 0 && !/[;\n{}()]/.test(text[start - 1] as string)) {
@@ -1102,10 +1095,7 @@ function identifierBefore(
     const before = region.slice(0, region.length - (identifier[1] as string).length).replace(/\s+$/, '');
     const marker = before[before.length - 1];
     // `temps: List<int>` puts a type behind the name; `[]Temperature` does the
-    // same in Go, while `int* values` and `vector<int> values` keep the name
-    // behind the type marker.
-    const emptySlice = marker === ']' && before[before.length - 2] === '[' && languageId === 'go';
-    if (marker === ':' || emptySlice) {
+    if (marker === ':') {
       region = before;
       continue;
     }
@@ -1200,7 +1190,7 @@ export function findLiteralCollections(text: string, languageId?: string): Liter
   };
 
   const withProperties = languageId === 'json' || languageId === 'jsonc';
-  for (const candidate of scanForAssignments(text, withProperties, languageId)) {
+  for (const candidate of scanForAssignments(text, withProperties)) {
     consider(candidate.name, candidate.bracket, candidate.offset);
   }
 

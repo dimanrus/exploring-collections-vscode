@@ -158,7 +158,6 @@ function localizedStrings(): LocalizedStrings {
       filterValueTo: 'to',
       matchAll: 'Match all',
       matchAny: 'Match any',
-      valueRequired: 'Enter a value',
       filterOperators: {
         contains: 'contains',
         notContains: 'does not contain',
@@ -394,6 +393,13 @@ describe('the whole collection filter builder', () => {
       ),
       'the builder must say that it filters the whole collection'
     );
+    const preview = document().querySelector('.filter-preview') as HTMLElement;
+    assert.equal(
+      preview.hidden,
+      true,
+      'an incomplete condition has nothing to preview, so no empty code box is shown'
+    );
+    assert.equal(preview.textContent, '', 'the preview box must not hold placeholder text');
   });
 
   it('builds a text condition and sends it to the host', async () => {
@@ -403,6 +409,9 @@ describe('the whole collection filter builder', () => {
     valueInput.dispatchEvent(new webview.dom.window.Event('input', { bubbles: true }));
     assert.equal(selects[0]?.value, 'City');
     assert.equal(selects[1]?.value, 'contains');
+    const preview = document().querySelector('.filter-preview') as HTMLElement;
+    assert.equal(preview.hidden, false, 'a complete condition is previewed');
+    assert.equal(preview.textContent, 'contains(x.City, "Seoul")');
 
     const apply = [...document().querySelectorAll('.filter-builder button')].find(
       (button) => (button.textContent || '').trim() === 'Apply'

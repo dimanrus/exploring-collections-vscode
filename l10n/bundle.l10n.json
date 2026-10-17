@@ -869,12 +869,6 @@
       "src/services/i18n.ts"
     ]
   },
-  "Enter a value": {
-    "message": "Enter a value",
-    "comment": [
-      "src/services/i18n.ts"
-    ]
-  },
   "contains": {
     "message": "contains",
     "comment": [

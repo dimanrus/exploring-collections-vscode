@@ -439,9 +439,3 @@ FodyWeavers.xsd
 
 # esbuild bundles (dist/extension.js, dist/webview.js) and the test bundles (out/)
 /dist/
-
-# C/C++ helper self tests (helpers/cc/build_and_test.sh)
-/helpers/cc/build/
-
-# Rust helper crate
-/helpers/rust/target/

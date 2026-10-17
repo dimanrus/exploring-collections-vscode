@@ -41,6 +41,25 @@ namespace ExploringCollections
             return context.Serialize(value);
         }
 
+        /// <summary>
+        /// Serializes one page of a collection into a UTF-8 file and returns the
+        /// number of characters written.
+        ///
+        /// Debug adapters truncate strings returned by a method call (vsdbg cuts
+        /// them at about 1,000 characters) and even the values of a string array
+        /// inherit that limit, so a file is the only transport that carries a
+        /// whole collection without one request per element.
+        /// </summary>
+        public static int WriteJsonFile(object value, int start, int count, string path)
+        {
+            var context = new SerializationContext(
+                DefaultMaxDepth,
+                count > 0 ? count : DefaultMaxItems);
+            var json = context.SerializePage(value, start, count);
+            System.IO.File.WriteAllText(path, json, new UTF8Encoding(false));
+            return json.Length;
+        }
+
         /// <summary>Returns a short, human readable description of a value.</summary>
         public static string Describe(object value)
         {
@@ -107,6 +126,93 @@ namespace ExploringCollections
 
                 WriteEnvelope("record", 1, () => WriteValue(value, _maxDepth - 1));
                 return _builder.ToString();
+            }
+
+            internal string SerializePage(object value, int start, int count)
+            {
+                if (start < 0)
+                {
+                    start = 0;
+                }
+
+                if (count <= 0)
+                {
+                    return Serialize(value);
+                }
+
+                // Tables and data sets are already bounded by maxItems; paging
+                // their rows would need a different contract, so they keep the
+                // regular whole-collection shape.
+                if (Tables.TryCreateDataSet(value, _maxItems) != null ||
+                    Tables.TryCreateTable(value, _maxItems) != null)
+                {
+                    return Serialize(value);
+                }
+
+                var pairs = Pairs.TryEnumerate(value, out var pairTotal);
+                if (pairs != null)
+                {
+                    if (pairTotal.HasValue && start >= pairTotal.Value)
+                    {
+                        WriteEnvelope("mapping", pairTotal, () => { });
+                        return _builder.ToString();
+                    }
+
+                    var page = TakePage(pairs, start, count);
+                    WriteEnvelope("mapping", pairTotal, () => WritePairs(page));
+                    return _builder.ToString();
+                }
+
+                if (Sequences.IsSequence(value, out var sequenceTotal))
+                {
+                    if (sequenceTotal.HasValue && start >= sequenceTotal.Value)
+                    {
+                        WriteEnvelope("sequence", sequenceTotal, () => { });
+                        return _builder.ToString();
+                    }
+
+                    // Indexed collections (List<T>, arrays) should not be
+                    // re-enumerated from the beginning for every page.
+                    if (value is IList list)
+                    {
+                        var indexedPage = new List<object>(count);
+                        var end = Math.Min(list.Count, start + count);
+                        for (var index = start; index < end; index++)
+                        {
+                            indexedPage.Add(list[index]);
+                        }
+
+                        WriteEnvelope("sequence", sequenceTotal, () => WriteItems(indexedPage));
+                        return _builder.ToString();
+                    }
+
+                    var page = TakePage(Sequences.Enumerate(value), start, count);
+                    WriteEnvelope("sequence", sequenceTotal, () => WriteItems(page));
+                    return _builder.ToString();
+                }
+
+                return Serialize(value);
+            }
+
+            private static List<T> TakePage<T>(IEnumerable<T> source, int start, int count)
+            {
+                var page = new List<T>(count);
+                var index = 0L;
+                foreach (var item in source)
+                {
+                    if (index >= start && page.Count < count)
+                    {
+                        page.Add(item);
+                    }
+
+                    index++;
+                    if (index >= start + count)
+                    {
+                        break;
+                    }
+                }
+
+                return page;
             }
 
             private void WriteEnvelope(string kind, long? total, Action body)

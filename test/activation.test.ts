@@ -83,7 +83,7 @@ describe('the activation contract', () => {
     assert.equal(stub.contextKeys.get('exploringCollections.hasSnapshot'), false);
     const debugTypes = stub.contextKeys.get('exploringCollections.supportedDebugTypes');
     assert.ok(Array.isArray(debugTypes));
-    for (const debugType of ['coreclr', 'pwa-node', 'debugpy', 'go', 'lldb', 'cppdbg']) {
+    for (const debugType of ['coreclr', 'netcoredbg', 'pwa-node', 'pwa-chrome']) {
       assert.ok(
         (debugTypes as string[]).includes(debugType),
         `${debugType} must be advertised to the 'debugType in ...' menu condition`
@@ -106,7 +106,7 @@ describe('the activation contract', () => {
         Array.isArray(entry) ? entry : [entry]
       ) as { language?: string }[]
     ).map((entry) => entry.language);
-    for (const language of ['csharp', 'fsharp', 'python', 'go', 'rust', 'cpp', 'c']) {
+    for (const language of ['csharp', 'fsharp', 'javascript', 'typescript']) {
       assert.ok(hoverLanguages.includes(language), `${language} must have hover links`);
     }
   });
@@ -116,7 +116,7 @@ describe('the activation contract', () => {
     const languages = stub.registeredInlineProviders
       .flatMap((entry) => entry.languages)
       .map((entry) => (entry as { language?: string }).language);
-    for (const language of ['csharp', 'fsharp', 'python', 'go', 'rust', 'cpp', 'c', 'javascript', 'typescript']) {
+    for (const language of ['csharp', 'fsharp', 'javascript', 'typescript']) {
       assert.ok(languages.includes(language), `${language} must have inline value hints`);
     }
   });
@@ -152,7 +152,7 @@ describe('the activation contract', () => {
 
     const ready = stub.outputLines.find((line) => line.startsWith('ready:'));
     assert.ok(ready, 'the log must summarise the provider registry');
-    for (const debugType of ['coreclr', 'vsdbg', 'pwa-node', 'debugpy', 'lldb', 'cppdbg', 'go', 'delve']) {
+    for (const debugType of ['coreclr', 'vsdbg', 'netcoredbg', 'pwa-node', 'pwa-chrome']) {
       assert.ok(ready.includes(debugType), `${debugType} must be part of the registry summary`);
     }
   });

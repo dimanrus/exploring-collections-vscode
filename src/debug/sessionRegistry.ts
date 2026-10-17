@@ -342,7 +342,6 @@ export class DebugSessionRegistry implements vscode.Disposable {
       maxDepth: settings.maxDepth,
       concurrency: settings.fetchConcurrency,
       timeoutMs: settings.timeoutMs,
-      useHelpers: settings.enableLanguageHelpers,
       dictionariesAsRows: settings.dictionariesAsRows,
       excludedMembers: settings.excludedMembers,
       token

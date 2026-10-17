@@ -17,7 +17,7 @@ export type RetrievalStrategy =
   | 'helper-json'
   | 'helper-native'
   | 'variables-walk'
-  | 'expression-subrange'
+  | 'adapter-previews'
   | 'source-literal';
 
 /** A single flattened column of the collection table. */
@@ -100,7 +100,7 @@ export interface SnapshotDiagnostics {
   fallbackReasons: string[];
   /** Statement of the filter that was pushed down to the debugger, if any. */
   pushedDownFilter?: string;
-  /** Provider supplied notes, e.g. "delve does not support call expressions". */
+  /** Provider supplied notes about fast path limitations. */
   notes: string[];
 }
 
@@ -170,7 +170,6 @@ export interface CaptureOptions {
   maxDepth: number;
   concurrency: number;
   timeoutMs: number;
-  useHelpers: boolean;
   dictionariesAsRows: boolean;
   excludedMembers: readonly string[];
   token?: CancellationTokenLike;

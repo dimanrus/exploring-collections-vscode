@@ -159,6 +159,13 @@ export class DapClient {
         { expression, frameId, context, includeAll: true },
         options
       );
+      // Some adapters (vsdbg among them) answer a failed evaluation with a
+      // successful response that carries the exception as the value and only
+      // flags it in the presentation hint.
+      if (body?.presentationHint?.attributes?.includes('failedEvaluation')) {
+        const message = body.result || body.type || 'evaluation failed';
+        return { ok: false, error: new Error(message), unsupported: false };
+      }
       return { ok: true, value: body };
     } catch (error) {
       return { ok: false, error, unsupported: isUnsupportedRequestError(error) };

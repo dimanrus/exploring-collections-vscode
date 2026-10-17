@@ -503,7 +503,6 @@ function strings(): LocalizedStrings['toolbar'] {
       filterValueTo: 'to',
       matchAll: 'Match all',
       matchAny: 'Match any',
-      valueRequired: 'Enter a value',
       filterOperators: {
         contains: 'contains',
         notContains: 'does not contain',
@@ -1193,7 +1192,6 @@ function openFilterBuilder(anchor: HTMLElement): void {
     apply: t.apply,
     clear: t.clear,
     cancel: t.cancel,
-    valueRequired: t.valueRequired,
     wholeCollection: t.filterWholeCollection,
     partialHint: state.filterInfo
       ? state.filterInfo.location === 'debugger'

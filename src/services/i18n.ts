@@ -101,7 +101,6 @@ export function localizeWebviewStrings(): LocalizedStrings {
       filterValueTo: t('to'),
       matchAll: t('Match all'),
       matchAny: t('Match any'),
-      valueRequired: t('Enter a value'),
       filterOperators: {
         contains: t('contains'),
         notContains: t('does not contain'),

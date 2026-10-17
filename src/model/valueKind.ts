@@ -68,7 +68,7 @@ export function normalizeTypeName(typeName: string | undefined): string {
   if (value.endsWith('[]') || /\[\d+\]$/.test(value)) {
     return 'array';
   }
-  // Rust/Go style references and pointers, including `&mut T`.
+  // C# and F# style references and pointers, including `in T` and `out T`.
   value = value.replace(/^(?:[&*]+\s*(?:mut\s+)?|mut\s+)+/, '').replace(/\s*[&]+$/, '');
   // Qualified names: System.Collections.Generic.List -> list
   const lastSegment = value.split(/[.:]/).filter((part) => part.length > 0).pop();

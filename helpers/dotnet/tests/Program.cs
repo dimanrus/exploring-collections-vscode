@@ -44,6 +44,7 @@ public static class Program
         DataSetEnvelope();
         DepthLimit();
         OptionsRespected();
+        RangeFile();
 
         Console.WriteLine($"{_checks} checks, {_failures} failure(s)");
         return _failures == 0 ? 0 : 1;
@@ -94,6 +95,27 @@ public static class Program
         var nullJson = Parse(CollectionHelper.ToJson(null));
         Check("null total", nullJson.GetProperty("total").GetInt32() == 1);
         Check("null item", nullJson.GetProperty("items")[0].ValueKind == JsonValueKind.Null, nullJson.ToString());
+    }
+
+    private static void RangeFile()
+    {
+        var numbers = Enumerable.Range(0, 1000).ToList();
+        var path = Path.Combine(Path.GetTempPath(), $"ec-helper-{Guid.NewGuid():N}.json");
+        try
+        {
+            var written = CollectionHelper.WriteJsonFile(numbers, 0, 100, path);
+            var text = File.ReadAllText(path);
+            Check("file length", written == text.Length);
+            var json = Parse(text);
+            Check("file kind", json.GetProperty("kind").GetString() == "sequence");
+            Check("file total", json.GetProperty("total").GetInt32() == 1000);
+            Check("file items", json.GetProperty("items").GetArrayLength() == 100);
+            Check("file first", json.GetProperty("items")[0].GetInt32() == 0);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     private static void Temporals()

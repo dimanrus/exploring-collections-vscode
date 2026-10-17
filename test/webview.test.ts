@@ -297,6 +297,27 @@ describe('pagination', () => {
     assert.equal(view.page, 0);
     assert.deepEqual(pageRows([], view).rows, []);
   });
+
+  it('reaches the last row of a 50000 element collection', () => {
+    const big: RowDescriptor[] = Array.from({ length: 50000 }, (_, index) => ({
+      index,
+      label: `[${index}]`,
+      cells: [cell(String(index), 'index'), cell(`Emp${index}`)]
+    }));
+    const view = viewWith({ page: 0, pageSize: 100 });
+
+    const pageCount = Math.ceil(big.length / view.pageSize);
+    assert.equal(pageCount, 500);
+
+    view.page = pageCount - 1;
+    assert.equal(clampPage(view, big.length), false, 'the last page must exist');
+    const page = pageRows(big, view);
+
+    assert.equal(page.offset, 49900);
+    assert.equal(page.rows.length, 100);
+    assert.equal(page.rows[0]?.label, '[49900]');
+    assert.equal(page.rows[99]?.label, '[49999]');
+  });
 });
 
 describe('column widths', () => {

@@ -18,7 +18,7 @@ import {
  *  1. the language of the file the debugger stopped in (200) — authoritative
  *  2. the debug type reported by VS Code (100)
  *  3. the language of the focused editor (150): a tie breaker for shared debug
- *     types such as `cppdbg`, which serves both C and C++
+ *     types shared by C# and F#
  */
 export abstract class AbstractLanguageProvider implements LanguageProvider {
   abstract readonly id: string;
@@ -29,10 +29,11 @@ export abstract class AbstractLanguageProvider implements LanguageProvider {
 
   readonly adapterHints: readonly string[] = [];
   readonly notes: readonly string[] = [];
+  readonly readElementsFromPreviews: boolean = false;
+  readonly requiresHelper: boolean = false;
 
   // Optional hooks redeclared here so that subclasses can mark them `override`.
   buildSerializeExpression?(source: string, options: HelperOptions): string[];
-  buildNativeHelperExpression?(source: string, options: HelperOptions): string | undefined;
   buildHelperLoadExpression?(helperPath: string): string | undefined;
   parseSerializedPayload?(payload: string): ElementNode[] | undefined;
   buildFilterExpression?(
@@ -40,19 +41,23 @@ export abstract class AbstractLanguageProvider implements LanguageProvider {
     filter: FilterEmitInput,
     options: HelperOptions
   ): FilterTranslation | undefined;
-  buildRangeExpression?(source: string, start: number, count: number): string | undefined;
+  buildNativeFileExpression?(
+    source: string,
+    start: number,
+    count: number,
+    path: string
+  ): string | undefined;
   buildMemberExpression?(source: string, path: readonly string[]): string | undefined;
 
   /**
    * Score used when the debug type decides. Providers that share a debug type
-   * lower or raise this value so ties resolve predictably (C# over F#, C++ over
-   * C, Rust over C++ for `lldb`).
+   * lower or raise this value so ties resolve predictably (C# over F#).
    */
   readonly debugTypePriority: number = 100;
 
   /**
    * Debug types this provider can also be used with, even though they are not
-   * its primary adapters (CodeLLDB serves both Rust and C++).
+   * its primary adapters.
    */
   protected readonly compatibleDebugTypes: readonly string[] = [];
 

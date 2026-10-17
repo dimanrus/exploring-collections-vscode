@@ -13,8 +13,18 @@ import { buildSnapshot, rowsFromElements, withRows, type ElementNode } from '../
 import { applyFilter, unresolvedIdentifiers } from '../filter/evaluator';
 import { collectFreeIdentifiers, formatExpression, parseFilter, type ParsedFilter } from '../filter/expression';
 import { isCutPayload, totalFromPayload } from './jsonPayload';
-import { RequestBudget, declaredCountOf, walkVariables, type WalkRoot } from './variablesWalk';
+import {
+  RequestBudget,
+  declaredCountOf,
+  previewsDescribeElements,
+  walkVariables,
+  type WalkRoot
+} from './variablesWalk';
 import type { HelperOptions, LanguageProvider } from './languageProvider';
+import { randomUUID } from 'node:crypto';
+import { readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { DapClient } from '../debug/dapClient';
 import { formatError, type Logger } from '../util/logging';
 import { INDEX_COLUMN_KEY } from '../util/types';
@@ -58,15 +68,6 @@ export function helperRelativePath(providerId: string): string {
     case 'csharp':
     case 'fsharp':
       return 'dotnet/dist/ExploringCollections.Helper.dll';
-    case 'python':
-      return 'python/exploring_collections_helper.py';
-    case 'go':
-      return 'go/exploring_collections.go';
-    case 'rust':
-      return 'rust/exploring_collections.rs';
-    case 'cpp':
-    case 'c':
-      return 'cc/exploring_collections.h';
     default:
       return '';
   }
@@ -80,9 +81,22 @@ export function helperRelativePath(providerId: string): string {
  *  2. serialization expression evaluated by the adapter (JSON round trip)
  *  3. universal `variables` walk (works with every adapter)
  */
+interface FastCapture {
+  strategy: RetrievalStrategy;
+  elements: ElementNode[];
+  total: number | null;
+  source: string;
+  truncated?: boolean;
+}
+
+/** Mutable facts the fast path discovers and the fallback walk can reuse. */
+interface FastState {
+  previewsUsable: boolean;
+}
+
 export async function captureCollection(request: CaptureRequest): Promise<CollectionSnapshot> {
   const started = Date.now();
-  const { client, provider, options, helperOptions, logger } = request;
+  const { client, provider, options, logger } = request;
   const dapOptions = { timeoutMs: options.timeoutMs, token: options.token };
   const warnings: string[] = [];
   const fallbackReasons: string[] = [];
@@ -91,85 +105,22 @@ export async function captureCollection(request: CaptureRequest): Promise<Collec
 
   const expression = request.root.evaluateName ?? request.source;
   const budget = new RequestBudget(request.requestBudget ?? 20000);
-  // The counters of the adapter, or the count its preview text carries: vsdbg
-  // reports `Count = 50000` for a big `List<T>` without any counters.
-  const declaredCount = request.root.childCount ?? null;
+  const state: FastState = { previewsUsable: false };
 
-  if (options.useHelpers) {
-    const helperPath = helperOptions.helperPath?.(helperRelativePath(provider.id));
-    const loadExpression = helperPath ? provider.buildHelperLoadExpression?.(helperPath) : undefined;
-
-    if (loadExpression !== undefined && !request.helperState.attempted) {
-      request.helperState.attempted = true;
-      const outcome = await client.tryEvaluate(loadExpression, request.frameId, 'watch', dapOptions);
-      request.helperState.loaded = outcome.ok;
-      if (!outcome.ok) {
-        request.helperState.failureReason = formatError(outcome.error);
-        fallbackReasons.push(`helper load failed: ${request.helperState.failureReason}`);
-        logger.debug(`helper load failed for ${provider.id}: ${request.helperState.failureReason}`);
-      } else {
-        logger.info(`helper loaded for ${provider.id}`);
-      }
-    }
-
-    // A collection the adapter declares as huge is paged through the evaluator
-    // before anything that would serialize all of it at once: one JSON page per
-    // request, instead of a payload of fifty thousand elements that the adapter
-    // is likely to cut (and one request per element if it does).
-    if (declaredCount !== null && declaredCount > RANGE_FIRST_ELEMENTS) {
-      const paged = await captureByRanges(request, budget, dapOptions);
-      if (paged && paged.elements.length > 0) {
-        if (paged.budgetSpent) {
-          warnings.push(budgetWarning(paged.elements.length, paged.total));
-        }
-        return finish('expression-subrange', paged.elements, paged.total, 'the debugger');
-      }
-      fallbackReasons.push('the debugger could not read the collection in pages');
-    }
-
-    if (request.helperState.loaded && provider.buildNativeHelperExpression) {
-      const nativeExpression = provider.buildNativeHelperExpression(expression, helperOptions);
-      if (nativeExpression) {
-        const outcome = await client.tryEvaluate(nativeExpression, request.frameId, 'watch', dapOptions);
-        if (outcome.ok && isCutPayload(outcome.value.result)) {
-          fallbackReasons.push(
-            `the debug adapter cut the payload of the helper (${outcome.value.result.length.toLocaleString()} characters)`
-          );
-        } else if (outcome.ok) {
-          const elements = provider.parseSerializedPayload?.(outcome.value.result);
-          if (elements) {
-            return finish('helper-native', elements, totalFromPayload(outcome.value.result), 'the helper');
-          }
-          fallbackReasons.push('the native helper returned a payload that is not a supported collection envelope');
-        } else {
-          fallbackReasons.push(`native helper call failed: ${formatError(outcome.error)}`);
-        }
-      }
-    }
-
-    if (provider.buildSerializeExpression) {
-      const candidates = provider.buildSerializeExpression(expression, helperOptions);
-      for (const candidate of candidates) {
-        const outcome = await client.tryEvaluate(candidate, request.frameId, 'watch', dapOptions);
-        if (!outcome.ok) {
-          fallbackReasons.push(`serializer failed (${summarize(candidate)}): ${formatError(outcome.error)}`);
-          continue;
-        }
-        if (isCutPayload(outcome.value.result)) {
-          fallbackReasons.push(
-            `the debug adapter cut the payload of ${summarize(candidate)} (${outcome.value.result.length.toLocaleString()} characters)`
-          );
-          continue;
-        }
-        const elements = provider.parseSerializedPayload?.(outcome.value.result);
-        if (elements) {
-          return finish('helper-json', elements, totalFromPayload(outcome.value.result), 'the helper');
-        }
-        fallbackReasons.push(`payload of ${summarize(candidate)} was not parseable as JSON`);
-      }
-    }
+  // Two steps only: one fast path selected by the language provider, then the
+  // universal variables walk. Languages without a usable slow fallback throw
+  // instead of walking element by element.
+  const fast = await captureFast(request, budget, dapOptions, state, fallbackReasons);
+  if (fast) {
+    return finish(fast.strategy, fast.elements, fast.total, fast.source, fast.truncated);
   }
-
+  if (provider.requiresHelper) {
+    const reason = fallbackReasons.length > 0 ? fallbackReasons.join('; ') : 'the helper is unavailable';
+    throw new Error(
+      `The ${provider.displayName} fast path could not read '${expression}': ${reason}. ` +
+        'Check that the bundled helper is present and that the debuggee can write to the system temp folder.'
+    );
+  }
 
   const walk = await walkVariables(request.root, {
     client,
@@ -177,27 +128,10 @@ export async function captureCollection(request: CaptureRequest): Promise<Collec
     formatOptions: request.formatOptions,
     budget,
     logger,
-    onProgress: request.onProgress
+    onProgress: request.onProgress,
+    // A mixed collection keeps the elements that do parse cheap on this pass.
+    expandPreviews: state.previewsUsable
   });
-
-  let elements = walk.elements;
-  let totalItems = walk.totalItems;
-  let truncated = walk.truncated;
-  let strategy: RetrievalStrategy = 'variables-walk';
-
-  // The adapter handed over less than it declared: the evaluator can still reach
-  // the rest of the collection, so try it before accepting the cut window.
-  const shortWindow =
-    walk.declaredChildren !== null && walk.readChildren < walk.declaredChildren && walk.readChildren > 0;
-  if (shortWindow) {
-    const paged = await captureByRanges(request, budget, dapOptions);
-    if (paged && paged.elements.length > walk.elements.length) {
-      if (paged.budgetSpent) {
-        warnings.push(budgetWarning(paged.elements.length, paged.total));
-      }
-      return finish('expression-subrange', paged.elements, paged.total, 'the debugger');
-    }
-  }
 
   warnings.push(...walk.warnings.filter((warning) => !warnings.includes(warning)));
   if (walk.budgetExhausted) {
@@ -206,9 +140,9 @@ export async function captureCollection(request: CaptureRequest): Promise<Collec
     );
   }
   if (fallbackReasons.length > 0) {
-    warnings.push('The fast serializer was unavailable, so the collection was enumerated through the debugger variables tree.');
+    warnings.push('The fast path was unavailable, so the collection was enumerated through the debugger variables tree.');
   }
-  return finish(strategy, elements, totalItems, 'the variables tree', truncated);
+  return finish('variables-walk', walk.elements, walk.totalItems, 'the variables tree', walk.truncated);
 
   function finish(
     strategyName: RetrievalStrategy,
@@ -221,7 +155,8 @@ export async function captureCollection(request: CaptureRequest): Promise<Collec
       knownTruncated ?? (total !== null && total > captured.length);
     if (isTruncated && total !== null && knownTruncated === undefined) {
       warnings.push(
-        `The collection holds ${total.toLocaleString()} elements; ${source} returned the first ${captured.length.toLocaleString()}.`
+        `The collection holds ${total.toLocaleString()} elements; ${source} returned the first ${captured.length.toLocaleString()}. ` +
+          'Increase exploringCollections.maxRows to read more.'
       );
     }
     return buildSnapshot({
@@ -252,102 +187,216 @@ export async function captureCollection(request: CaptureRequest): Promise<Collec
   }
 }
 
-/** Explains a window that the capture budget cut short. */
-function budgetWarning(rows: number, total: number | null): string {
-  const of = total === null ? '' : ` of ${total.toLocaleString()}`;
-  return (
-    `The capture stopped after ${rows.toLocaleString()}${of} rows: raising ` +
-    'exploringCollections.captureBudgetMs reads further.'
-  );
-}
-
-/** Elements asked for in one evaluator page of the range based capture. */
-const RANGE_PAGE_SIZE = 1024;
-/** Smallest page the range based capture falls back to when a payload is cut. */
-const RANGE_MIN_PAGE = 4;
-/** Above this declared size the evaluator is asked before the variables walk. */
-const RANGE_FIRST_ELEMENTS = 2000;
+/** Above this declared size the JS adapter previews are read in bulk. */
+const PREVIEW_FIRST_ELEMENTS = 50;
+/** Time floor for the preview based walk, which makes no per element request. */
+const PREVIEW_WALK_BUDGET_MS = 60000;
 
 /**
- * Reads the collection in JSON pages with the provider's range expression
- * (`Skip`/`Take`, `slice`, `islice`, …).
+ * The single fast path. It returns rows when the language provider can read the
+ * collection in bulk, and `undefined` when only the variables walk is left.
  *
- * Adapters that cap a single `variables` response still evaluate `items.Skip(n)
- * .Take(m)` over the whole collection, so this reaches elements the variables
- * walk cannot see — and it costs one request per page instead of one per element.
- * A page whose payload does not parse (an adapter that truncates long results) is
- * retried with a smaller page; when even that fails the walk result is kept.
+ * JavaScript/TypeScript: the adapter previews carry complete object members, so
+ * one `variables` response materializes the whole collection.
+ * C#/F#: the bundled helper or the provider's range expression serializes a
+ * page (or the whole collection when it is small).
  */
-async function captureByRanges(
+async function captureFast(
   request: CaptureRequest,
   budget: RequestBudget,
-  dapOptions: { timeoutMs: number; token?: { isCancellationRequested: boolean } }
-): Promise<{ elements: ElementNode[]; total: number | null; budgetSpent: boolean } | undefined> {
-  const { provider, options } = request;
-  const expression = request.root.evaluateName ?? request.source;
-  if (!provider.buildRangeExpression || !provider.parseSerializedPayload || expression.trim().length === 0) {
+  dapOptions: { timeoutMs: number; token?: { isCancellationRequested: boolean } },
+  state: FastState,
+  fallbackReasons: string[]
+): Promise<FastCapture | undefined> {
+  if (request.provider.readElementsFromPreviews) {
+    return captureFromPreviews(request, budget, dapOptions, state, fallbackReasons);
+  }
+
+  // C#/F# have exactly one fast read: the helper writes the page to a file.
+  const helperLoaded = await loadHelper(request, dapOptions, fallbackReasons);
+  if (!helperLoaded || !request.provider.buildNativeFileExpression) {
     return undefined;
   }
-  const limit = Math.max(1, options.maxRows);
+  return captureFile(request, budget, dapOptions, fallbackReasons);
+}
+
+/** Reads a JS/TS collection from the adapter previews. */
+async function captureFromPreviews(
+  request: CaptureRequest,
+  budget: RequestBudget,
+  dapOptions: { timeoutMs: number; token?: { isCancellationRequested: boolean } },
+  state: FastState,
+  fallbackReasons: string[]
+): Promise<FastCapture | undefined> {
+  const { client, options, logger } = request;
   const declared = request.root.childCount ?? null;
-  // The same budget as the walk: paging is cheap per request, but a collection
-  // of a million elements must not keep the viewer busy forever either.
-  const deadline = Date.now() + Math.max(1, options.captureBudgetMs ?? 30000);
-  const elements: ElementNode[] = [];
-  let pageSize = Math.min(limit, RANGE_PAGE_SIZE);
-  // Largest page the adapter is known to deliver in one piece; a page the
-  // adapter cut lowers it, so the reader converges instead of oscillating.
-  let ceiling = pageSize;
-  let start = 0;
 
-  while (elements.length < limit && !budget.exhausted && Date.now() < deadline) {
-    const count = Math.min(pageSize, limit - elements.length);
-    const range = provider.buildRangeExpression(expression, start, count);
-    if (!range) {
-      return elements.length > 0 ? { elements, total: declared, budgetSpent: false } : undefined;
-    }
-    budget.consume();
-    const outcome = await request.client.tryEvaluate(range, request.frameId, 'watch', dapOptions);
-    if (!outcome.ok) {
-      request.logger.debug(`range page failed for '${expression}': ${formatError(outcome.error)}`);
-      return elements.length > 0 ? { elements, total: declared, budgetSpent: false } : undefined;
-    }
-    const cut = isCutPayload(outcome.value.result);
-    const page = cut ? undefined : provider.parseSerializedPayload(outcome.value.result);
-    if (!page || page.length === 0) {
-      if (pageSize > RANGE_MIN_PAGE) {
-        // The adapter cut the payload or refused it: ask for less next time.
-        ceiling = Math.min(ceiling, pageSize - 1);
-        pageSize = Math.max(RANGE_MIN_PAGE, Math.floor(pageSize / 2));
-        continue;
+  if (declared !== null && declared > PREVIEW_FIRST_ELEMENTS) {
+    const probe = await previewsDescribeElements(request.root, {
+      client,
+      options,
+      formatOptions: request.formatOptions,
+      budget,
+      logger
+    });
+    state.previewsUsable = probe.usable;
+    if (probe.usable) {
+      // Some adapters answer the probe with the whole child list; the walk can
+      // reuse it instead of transferring the same payload twice.
+      const covered = Math.min(options.maxRows, declared);
+      const prefetchedChildren = probe.children.length >= covered ? probe.children : undefined;
+      const previewWalk = await walkVariables(request.root, {
+        client,
+        // Building rows from previews costs no debugger requests, so the walk
+        // budget (meant for one request per element) must not cut it.
+        options: { ...options, captureBudgetMs: Math.max(options.captureBudgetMs, PREVIEW_WALK_BUDGET_MS) },
+        formatOptions: request.formatOptions,
+        budget,
+        logger,
+        onProgress: request.onProgress,
+        expandPreviews: true,
+        prefetchedChildren
+      });
+      if (previewWalk.elements.length > 0 && previewWalk.previewRows === previewWalk.elements.length) {
+        return {
+          strategy: 'adapter-previews',
+          elements: previewWalk.elements,
+          total: previewWalk.totalItems,
+          source: 'the adapter previews',
+          truncated: previewWalk.truncated
+        };
       }
-      break;
-    }
-    for (const [index, element] of page.entries()) {
-      if (/^\[\d+\]$/.test(element.label)) {
-        element.label = `[${start + index}]`;
-      }
-    }
-    elements.push(...page.slice(0, limit - elements.length));
-    start += page.length;
-    if (page.length < count) {
-      // The range ran past the end of the collection.
-      break;
-    }
-    if (count === pageSize && pageSize < ceiling) {
-      // The page survived; ask for more next time, but never past a size the
-      // adapter already cut.
-      pageSize = Math.min(ceiling, pageSize * 2);
-    }
-    if (declared !== null && elements.length >= declared) {
-      break;
+      fallbackReasons.push('the adapter previews did not describe every element');
     }
   }
 
-  if (elements.length === 0) {
+  if (declared === null || declared <= PREVIEW_FIRST_ELEMENTS) {
+    return captureWhole(request, dapOptions, fallbackReasons);
+  }
+  return undefined;
+}
+
+/** Loads the helper assembly once per session. */
+async function loadHelper(
+  request: CaptureRequest,
+  dapOptions: { timeoutMs: number; token?: { isCancellationRequested: boolean } },
+  fallbackReasons: string[]
+): Promise<boolean> {
+  if (request.helperState.attempted) {
+    return request.helperState.loaded;
+  }
+  const helperPath = request.helperOptions.helperPath?.(helperRelativePath(request.provider.id));
+  const loadExpression = helperPath
+    ? request.provider.buildHelperLoadExpression?.(helperPath)
+    : undefined;
+  if (loadExpression === undefined) {
+    return false;
+  }
+  request.helperState.attempted = true;
+  const outcome = await request.client.tryEvaluate(loadExpression, request.frameId, 'watch', dapOptions);
+  request.helperState.loaded = outcome.ok;
+  if (!outcome.ok) {
+    request.helperState.failureReason = formatError(outcome.error);
+    fallbackReasons.push(`helper load failed: ${request.helperState.failureReason}`);
+    request.logger.debug(`helper load failed for ${request.provider.id}: ${request.helperState.failureReason}`);
+    return false;
+  }
+  request.logger.info(`helper loaded for ${request.provider.id}`);
+  return true;
+}
+
+/**
+ * Reads the collection through the bundled helper, which serializes a page into
+ * a temporary file. A method result is capped by the adapter (vsdbg cuts it at
+ * about 1,000 characters) and even the chunks of a string array inherit that
+ * limit, so the file is the only transport that carries the whole page in one
+ * request. The file is removed right after it is read.
+ */
+async function captureFile(
+  request: CaptureRequest,
+  budget: RequestBudget,
+  dapOptions: { timeoutMs: number; token?: { isCancellationRequested: boolean } },
+  fallbackReasons: string[]
+): Promise<FastCapture | undefined> {
+  const { client, provider, options } = request;
+  if (!provider.buildNativeFileExpression || !provider.parseSerializedPayload) {
     return undefined;
   }
-  return { elements, total: declared, budgetSpent: Date.now() >= deadline };
+  const expression = request.root.evaluateName ?? request.source;
+  const declared = request.root.childCount ?? null;
+  const count = Math.max(1, Math.min(options.maxRows, declared ?? options.maxRows));
+  const path = join(tmpdir(), `exploring-collections-${randomUUID()}.json`);
+  const writeExpression = provider.buildNativeFileExpression(expression, 0, count, path);
+  if (!writeExpression) {
+    return undefined;
+  }
+
+  try {
+    if (!budget.consume()) {
+      return undefined;
+    }
+    const outcome = await client.tryEvaluate(writeExpression, request.frameId, 'watch', dapOptions);
+    if (!outcome.ok) {
+      fallbackReasons.push(`helper file write failed: ${formatError(outcome.error)}`);
+      return undefined;
+    }
+    const payload = await readFile(path, 'utf8');
+    const elements = provider.parseSerializedPayload(payload);
+    if (!elements) {
+      fallbackReasons.push('the helper file did not contain a supported collection envelope');
+      return undefined;
+    }
+    const total = totalFromPayload(payload);
+    request.onProgress?.(elements.length, total ?? elements.length);
+    return { strategy: 'helper-native', elements, total, source: 'the helper' };
+  } catch (error) {
+    fallbackReasons.push(`helper file could not be read: ${formatError(error)}`);
+    return undefined;
+  } finally {
+    await rm(path, { force: true }).catch(() => undefined);
+  }
+}
+
+/**
+ * Serializes a small JavaScript/TypeScript collection in one expression. Only
+ * used below the preview threshold, where the payload fits the adapter limit.
+ */
+async function captureWhole(
+  request: CaptureRequest,
+  dapOptions: { timeoutMs: number; token?: { isCancellationRequested: boolean } },
+  fallbackReasons: string[]
+): Promise<FastCapture | undefined> {
+  const { client, provider, helperOptions } = request;
+  const expression = request.root.evaluateName ?? request.source;
+  if (!provider.buildSerializeExpression) {
+    return undefined;
+  }
+
+  for (const candidate of provider.buildSerializeExpression(expression, helperOptions)) {
+    const outcome = await client.tryEvaluate(candidate, request.frameId, 'watch', dapOptions);
+    if (!outcome.ok) {
+      fallbackReasons.push(`serializer failed (${summarize(candidate)}): ${formatError(outcome.error)}`);
+      continue;
+    }
+    if (isCutPayload(outcome.value.result)) {
+      fallbackReasons.push(
+        `the debug adapter cut the payload of ${summarize(candidate)} (${outcome.value.result.length.toLocaleString()} characters)`
+      );
+      continue;
+    }
+    const elements = provider.parseSerializedPayload?.(outcome.value.result);
+    if (elements) {
+      return {
+        strategy: 'helper-json',
+        elements,
+        total: totalFromPayload(outcome.value.result),
+        source: 'the Inline serializer'
+      };
+    }
+    fallbackReasons.push(`payload of ${summarize(candidate)} was not parseable as JSON`);
+  }
+
+  return undefined;
 }
 
 function summarize(expression: string): string {

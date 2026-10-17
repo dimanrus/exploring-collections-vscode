@@ -5,7 +5,6 @@ import { createProviderRegistry, helperRelativePath } from '../src/providers';
 import type { HelperOptions, LanguageProvider, ProviderMatchContext } from '../src/providers/languageProvider';
 import { languageFromPath, toLanguageId } from '../src/providers/languageProvider';
 import { buildJavaScriptSerializer } from '../src/providers/javascriptProvider';
-import { buildPythonHelperCall, buildPythonInlineSerializer } from '../src/providers/pythonProvider';
 import { emitBody } from '../src/filter/emit';
 import { parseFilter } from '../src/filter/expression';
 import { buildXlsx } from '../src/export/xlsx';
@@ -24,63 +23,34 @@ function match(context: Partial<ProviderMatchContext>): LanguageProvider | undef
 
 const helperOptions: HelperOptions = {
   depth: 6,
-  helperPath: (relative) => `/extension/helpers/${relative}`,
-  readHelper: (relative) => (relative.endsWith('.py') ? 'def __ec_dump(value): ...' : undefined)
+  helperPath: (relative) => `/extension/helpers/${relative}`
 };
 
 describe('provider resolution', () => {
-  it('exposes every documented language', () => {
+  it('exposes the supported languages', () => {
     // TypeScript is served by the JavaScript provider, which owns both.
     const languages = registry.all().map((provider) => provider.language).sort();
-    assert.deepEqual(languages, [
-      'c',
-      'cpp',
-      'csharp',
-      'fsharp',
-      'go',
-      'javascript',
-      'python',
-      'rust'
-    ]);
+    assert.deepEqual(languages, ['csharp', 'fsharp', 'javascript']);
     assert.deepEqual(
       registry.all().map((provider) => provider.displayName).sort(),
-      ['C', 'C#', 'C++', 'F#', 'Go', 'JavaScript / TypeScript', 'Python', 'Rust']
+      ['C#', 'F#', 'JavaScript / TypeScript']
     );
   });
 
-  it('resolves .NET, JavaScript, Python and Go debug types', () => {
+  it('resolves .NET and JavaScript debug types', () => {
     assert.equal(match({ debugType: 'coreclr' })?.id, 'csharp');
     assert.equal(match({ debugType: 'netcoredbg' })?.id, 'csharp');
     assert.equal(match({ debugType: 'pwa-node' })?.id, 'javascript');
-    assert.equal(match({ debugType: 'debugpy' })?.id, 'python');
-    assert.equal(match({ debugType: 'dlv' })?.id, 'go');
-    assert.equal(match({ debugType: 'lldb' })?.id, 'rust');
-  });
-
-  it('uses the stopped document to disambiguate shared adapters', () => {
-    // cppdbg serves both C and C++, the editor language decides.
-    assert.equal(match({ debugType: 'cppdbg', editorLanguageId: 'cpp' })?.id, 'cpp');
-    assert.equal(match({ debugType: 'cppdbg', editorLanguageId: 'c' })?.id, 'c');
-    // Without an editor, C++ wins the tie.
-    assert.equal(match({ debugType: 'cppdbg' })?.id, 'cpp');
+    assert.equal(match({ debugType: 'debugpy' }), undefined);
   });
 
   it('uses the stopped source path when no editor is active', () => {
-    assert.equal(match({ debugType: 'cppdbg', sourcePath: '/tmp/main.c' })?.id, 'c');
     assert.equal(match({ debugType: 'coreclr', sourcePath: '/tmp/Script.fsx' })?.id, 'fsharp');
     assert.equal(match({ debugType: 'coreclr', sourcePath: '/tmp/Program.cs' })?.id, 'csharp');
   });
 
   it('ignores .NET providers for adapters that cannot evaluate C#', () => {
     assert.equal(registry.byId('csharp')!.supportsDebugType('pwa-node'), false);
-    assert.equal(match({ debugType: 'debugpy' })?.id, 'python');
-  });
-
-  it('extends a family with adapters that serve several languages', () => {
-    assert.equal(registry.byId('cpp')!.supportsDebugType('lldb'), true);
-    assert.equal(registry.byId('c')!.supportsDebugType('lldb'), true);
-    assert.equal(registry.byId('rust')!.supportsDebugType('lldb'), true);
-    assert.equal(registry.byId('python')!.supportsDebugType('lldb'), false);
   });
 
   it('exposes the languages and debug types each provider owns', () => {
@@ -95,24 +65,17 @@ describe('provider resolution', () => {
   });
 
   it('does not let an unrelated focused editor hijack the session', () => {
-    // The focused editor is only a hint: a Rust file open next to a Python
-    // session must not resolve to the Rust provider.
-    assert.equal(match({ debugType: 'debugpy', editorLanguageId: 'rust' })?.id, 'python');
-    assert.equal(match({ debugType: 'pwa-node', editorLanguageId: 'cpp' })?.id, 'javascript');
-    assert.equal(match({ debugType: 'coreclr', editorLanguageId: 'python' })?.id, 'csharp');
+    // The focused editor is only a hint and cannot override the family.
+    assert.equal(match({ debugType: 'pwa-node', editorLanguageId: 'fsharp' })?.id, 'javascript');
+    assert.equal(match({ debugType: 'coreclr', editorLanguageId: 'typescript' })?.id, 'csharp');
   });
 
   it('treats the stopped file as authoritative', () => {
     assert.equal(match({ debugType: 'coreclr', stoppedLanguageId: 'fsharp' })?.id, 'fsharp');
-    assert.equal(match({ debugType: 'cppdbg', stoppedLanguageId: 'c' })?.id, 'c');
-    // CodeLLDB is used for C++ as well, so a stopped C++ file wins over Rust.
-    assert.equal(match({ debugType: 'lldb', stoppedLanguageId: 'cpp' })?.id, 'cpp');
     // A stopped file of a language outside the family does not hijack the
     // session: the family default is used instead.
-    assert.equal(match({ debugType: 'coreclr', stoppedLanguageId: 'python' })?.id, 'csharp');
+    assert.equal(match({ debugType: 'coreclr', stoppedLanguageId: 'javascript' })?.id, 'csharp');
     assert.equal(match({ debugType: 'pwa-node', stoppedLanguageId: 'csharp' })?.id, 'javascript');
-    // An unknown adapter with no family at all uses the file language.
-    assert.equal(match({ debugType: 'my-debugger', sourcePath: '/tmp/main.rs' })?.id, 'rust');
   });
 
   it('accepts JavaScript and TypeScript through the same provider', () => {
@@ -123,9 +86,9 @@ describe('provider resolution', () => {
   it('honours an explicit override from the settings', () => {
     const provider = registry.resolve({
       debugType: 'my-debugger',
-      customTypes: { 'my-debugger': 'python' }
+      customTypes: { 'my-debugger': 'csharp' }
     });
-    assert.equal(provider?.id, 'python');
+    assert.equal(provider?.id, 'csharp');
   });
 
   it('returns nothing for an unknown debug type', () => {
@@ -134,7 +97,7 @@ describe('provider resolution', () => {
 
   it('lists the debug types used by the menu contributions', () => {
     const types = registry.supportedDebugTypes();
-    for (const expected of ['coreclr', 'pwa-node', 'debugpy', 'dlv', 'lldb', 'cppdbg']) {
+    for (const expected of ['coreclr', 'netcoredbg', 'pwa-node', 'pwa-chrome']) {
       assert.ok(types.includes(expected), `missing ${expected}`);
     }
   });
@@ -144,12 +107,9 @@ describe('provider resolution', () => {
     assert.equal(toLanguageId('typescriptreact'), 'typescript');
     assert.equal(toLanguageId('unknown'), undefined);
     assert.equal(languageFromPath('/a/b/Program.fs'), 'fsharp');
-    assert.equal(languageFromPath('/a/b/main.c'), 'c');
-    assert.equal(languageFromPath('/a/b/main.cpp'), 'cpp');
-    assert.equal(languageFromPath('/a/b/main.h'), 'cpp');
-    assert.equal(languageFromPath('/a/b/main.rs'), 'rust');
-    assert.equal(languageFromPath('/a/b/main.go'), 'go');
-    assert.equal(languageFromPath('/a/b/main.py'), 'python');
+    assert.equal(languageFromPath('/a/b/Program.cs'), 'csharp');
+    assert.equal(languageFromPath('/a/b/main.mjs'), 'javascript');
+    assert.equal(languageFromPath('/a/b/main.py'), undefined);
     assert.equal(languageFromPath('/a/b/main.tsx'), 'typescript');
     assert.equal(languageFromPath('/a/b/noextension'), undefined);
   });
@@ -165,24 +125,11 @@ describe('provider expressions', () => {
     };
   };
 
-  it('offers System.Text.Json before Newtonsoft for C#', () => {
+  it('uses the helper file and the helper load expression for .NET', () => {
     const provider = registry.byId('csharp')!;
-    const candidates = provider.buildSerializeExpression!('temperatures', helperOptions);
-    assert.match(candidates[0]!, /System\.Text\.Json\.JsonSerializer\.Serialize\(temperatures/);
-    assert.match(candidates[1]!, /System\.Text\.Json/);
-    assert.match(candidates[2]!, /Newtonsoft/);
-  });
-
-  it('skips serializers for ADO.NET types that the helper handles', () => {
-    const provider = registry.byId('csharp')!;
-    const candidates = provider.buildSerializeExpression!('table', {
-      ...helperOptions,
-      rootType: 'System.Data.DataTable'
-    });
-    assert.deepEqual(candidates, []);
     assert.match(
-      provider.buildNativeHelperExpression!('table', helperOptions) ?? '',
-      /ExploringCollections\.CollectionHelper\.ToJson/
+      provider.buildNativeFileExpression!('table', 0, 100, '/tmp/page.json') ?? '',
+      /ExploringCollections\.CollectionHelper\.WriteJsonFile\(table, 0, 100, "\/tmp\/page\.json"\)/
     );
     assert.match(
       provider.buildHelperLoadExpression!('/x/helper.dll') ?? '',
@@ -235,25 +182,23 @@ describe('provider expressions', () => {
     assert.deepEqual(record.items, [{ cityCount: 3 }]);
   });
 
-  it('builds C# and F# range expressions', () => {
-    const csharpRange = registry.byId('csharp')!.buildRangeExpression!('items', 10, 50) ?? '';
-    assert.ok(csharpRange.includes('Skip(items, 10)'), csharpRange);
-    assert.match(csharpRange, /, 50\)\)/);
-    // A page has to travel as JSON, otherwise the debugger hands back a preview
-    // string that the payload reader cannot parse.
-    assert.match(csharpRange, /JsonSerializer\.Serialize/);
-
-    const fsharpRange = registry.byId('fsharp')!.buildRangeExpression!('items', 10, 50) ?? '';
-    assert.match(fsharpRange, /Seq\.skip 10/);
-    assert.match(fsharpRange, /JsonSerializer\.Serialize/);
+  it('builds the helper file expression for C# and F#', () => {
+    const expression =
+      registry.byId('csharp')!.buildNativeFileExpression!('items', 0, 1000, '/tmp/page.json') ?? '';
+    assert.match(expression, /ExploringCollections\.CollectionHelper\.WriteJsonFile/);
+    assert.match(expression, /WriteJsonFile\(items, 0, 1000, "\/tmp\/page\.json"\)/);
+    assert.equal(
+      registry.byId('javascript')!.buildNativeFileExpression,
+      undefined,
+      'JavaScript reads adapter previews instead of writing files'
+    );
   });
 
   it('builds member expressions per language', () => {
     assert.equal(registry.byId('csharp')!.buildMemberExpression!('x', ['Address', 'City']), 'x.Address.City');
     assert.equal(registry.byId('csharp')!.buildMemberExpression!('x', ['[0]', 'City']), 'x[0].City');
     assert.equal(registry.byId('javascript')!.buildMemberExpression!('x', ['a', 'b']), 'x.a.b');
-    assert.equal(registry.byId('python')!.buildMemberExpression!('x', ['a', 'b']), 'x.a.b');
-    assert.equal(registry.byId('go')!.buildMemberExpression!('x', ['Items', '[2]']), 'x.Items[2]');
+    assert.equal(registry.byId('fsharp')!.buildMemberExpression!('x', ['Address', 'City']), 'x.Address.City');
   });
 
   it('serializes JavaScript with a self contained IIFE', () => {
@@ -282,8 +227,8 @@ describe('provider expressions', () => {
     assert.deepEqual(elements[0]!.raw, { city: 'Seoul' });
   });
 
-  it('parses enveloped and bare payloads for every helper', () => {
-    const provider = registry.byId('python')!;
+  it('parses enveloped and bare payloads', () => {
+    const provider = registry.byId('csharp')!;
     const bare = provider.parseSerializedPayload!('[{"a":1},{"a":2}]')!;
     assert.equal(bare.length, 2);
     const doubleEncoded = provider.parseSerializedPayload!(
@@ -293,51 +238,17 @@ describe('provider expressions', () => {
     assert.equal(provider.parseSerializedPayload!('not json'), undefined);
   });
 
-  it('wraps Python helpers and keeps a dependency free fallback', () => {
-    const call = buildPythonHelperCall('temperatures', 'def __ec_dump(value):\n    return "{}"');
-    assert.match(call, /__import__\('builtins'\)\.exec\(/);
-    assert.match(call, /setdefault\("__ec_ns", \{\}\)/);
-    assert.match(call, /__ec_ns\['__ec_dump'\]\(temperatures\)/);
-
-    const inline = buildPythonInlineSerializer('temperatures');
-    assert.match(inline, /__import__\('json'\)\.dumps/);
-    assert.match(inline, /'__ec': 1/);
-  });
-
-  it('prefers the bundled helper for Python and falls back when it is missing', () => {
-    const provider = registry.byId('python')!;
-    const withHelper = provider.buildSerializeExpression!('x', helperOptions);
-    assert.equal(withHelper.length, 2);
-    assert.match(withHelper[0]!, /__ec_ns/);
-
-    const withoutHelper = provider.buildSerializeExpression!('x', { depth: 6 });
-    assert.equal(withoutHelper.length, 1);
-    assert.match(withoutHelper[0]!, /__import__\('json'\)/);
-  });
-
-  it('does not push filters down for the compiled languages', () => {
-    for (const id of ['go', 'rust', 'cpp', 'c']) {
-      const provider = registry.byId(id)!;
-      assert.equal(provider.buildFilterExpression, undefined, `${id} must filter on the client`);
-      assert.equal(provider.buildSerializeExpression, undefined, `${id} has no serializer`);
+  it('does not read collections of languages the extension no longer supports', () => {
+    for (const id of ['python', 'go', 'rust', 'cpp', 'c']) {
+      assert.equal(registry.byId(id), undefined, `${id} must not be registered`);
     }
-  });
-
-  it('offers a native helper only where a single expression can express it', () => {
-    assert.match(registry.byId('cpp')!.buildNativeHelperExpression!('items', helperOptions)!, /dump_json_cstr\(items\)/);
-    assert.match(registry.byId('rust')!.buildNativeHelperExpression!('items', helperOptions)!, /dump_json\(&items\)/);
-    assert.match(registry.byId('go')!.buildNativeHelperExpression!('items', helperOptions)!, /exploringcollections\.Dump\(items\)/);
-    assert.equal(registry.byId('c')!.buildNativeHelperExpression!('items', helperOptions), undefined);
   });
 
   it('resolves the bundled helper paths', () => {
     assert.equal(helperRelativePath('csharp'), 'dotnet/dist/ExploringCollections.Helper.dll');
     assert.equal(helperRelativePath('fsharp'), 'dotnet/dist/ExploringCollections.Helper.dll');
-    assert.equal(helperRelativePath('python'), 'python/exploring_collections_helper.py');
-    assert.equal(helperRelativePath('go'), 'go/exploring_collections.go');
-    assert.equal(helperRelativePath('rust'), 'rust/exploring_collections.rs');
-    assert.equal(helperRelativePath('cpp'), 'cc/exploring_collections.h');
-    assert.equal(helperRelativePath('c'), 'cc/exploring_collections.h');
+    assert.equal(helperRelativePath('javascript'), '');
+    assert.equal(helperRelativePath('python'), '');
   });
 
   it('documents the limitations of every provider', () => {
