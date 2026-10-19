@@ -2,8 +2,6 @@ import type { ElementNode } from '../model/snapshotBuilder';
 import {
   languageFromPath,
   toLanguageId,
-  type FilterEmitInput,
-  type FilterTranslation,
   type HelperOptions,
   type LanguageId,
   type LanguageProvider,
@@ -36,11 +34,6 @@ export abstract class AbstractLanguageProvider implements LanguageProvider {
   buildSerializeExpression?(source: string, options: HelperOptions): string[];
   buildHelperLoadExpression?(helperPath: string): string | undefined;
   parseSerializedPayload?(payload: string): ElementNode[] | undefined;
-  buildFilterExpression?(
-    source: string,
-    filter: FilterEmitInput,
-    options: HelperOptions
-  ): FilterTranslation | undefined;
   buildNativeFileExpression?(
     source: string,
     start: number,

@@ -2,7 +2,7 @@
   "name": "exploring-collections",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "dimanrus",
   "license": "MIT",
   "author": {
@@ -376,11 +376,6 @@
           "minimum": 1000,
           "maximum": 600000,
           "markdownDescription": "%configuration.timeoutMs.description%"
-        },
-        "exploringCollections.enableFilterPushdown": {
-          "type": "boolean",
-          "default": true,
-          "markdownDescription": "%configuration.enableFilterPushdown.description%"
         },
         "exploringCollections.enableCharts": {
           "type": "boolean",

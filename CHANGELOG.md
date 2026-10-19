@@ -6,18 +6,19 @@ All notable changes to **Exploring Collections** are documented in this file. En
 
 ---
 
-<a id="en-1-0-0"></a>
-## 🚀 [1.0.0] — 2026-10-17
+<a id="en-1-1-0"></a>
+## 🚀 [1.1.0] — 2026-10-19
 
-[🇷🇺 Читать эту версию по-русски](./CHANGELOG.ru.md#ru-1-0-0)
+[🇷🇺 Читать эту версию по-русски](./CHANGELOG.ru.md#ru-1-1-0)
 
 ### ✨ Added
 
 - **Design time data preview** — data hardcoded in the source can be opened without a debug session: a `Preview data` CodeLens above the literal, the `Preview Collection Data from Source` command and an editor context menu entry. C#, F#, JavaScript/TypeScript and JSON literals are parsed; `Ctrl+Alt+R` re-reads the literal after an edit.
-- **Whole collection filter builder** — a button next to the search builds `WHERE x => …` conditions per column (contains, does not contain, equals, is not, starts with, ends with, regex, greater/less/between, null/empty/true/false) with a live preview, parsing of existing conditions and pushdown into the debuggee for C#, F# and JavaScript/TypeScript.
+- **Condition builder** — a button next to the search builds `WHERE x => …` conditions per column (contains, does not contain, equals, is not, starts with, ends with, regex, greater/less/between, null/empty/true/false) with a live preview and parsing of existing conditions. The condition runs over the captured rows, so it needs no debugger request.
 - **Full width button in the editor title bar** — left of *Split Editor Right*, instead of a button inside the panel.
 - **“Explore code lens” section in the diagnostics report** — the line of every lens, why it was chosen there, the state of `editor.codeLens` and of both settings.
 - **Pager: an “All (N)” entry** — the grid can show every row at once.
+- **One chip per condition** — the filter bar lists every condition of the active filter separately, and each chip has its own ✕ that removes just that condition; a range stays one chip.
 - **`Explore collection` CodeLens** — above every collection that is in scope at the current breakpoint, right in the stopped file: the name, the element count and one click to the viewer. It refreshes on every step and frame change.
 - **Explore link in the tooltip** — hovering a collection variable adds its own tooltip block with an `Explore collection` link (the command is enabled through `isTrusted` for that command only).
 - **Collections in the activity bar tree** — a debug session node expands into the collections of the frame (name, element count, type) with the Explore command; previously it only listed sessions.
@@ -56,9 +57,13 @@ All notable changes to **Exploring Collections** are documented in this file. En
 - **The size comes from the preview text when the adapter reports no counters.** `vsdbg` reports no `indexedVariables` for a `List<T>`: the size only shows up in the preview (`Count = 50000`). That number is now used as the declared size, so a window the adapter cut is both visible and paged through instead of silently staying at 25 rows.
 - **A capture can no longer hang.** The `exploringCollections.captureBudgetMs` budget (30 s by default) bounds the variables walk (one request per element, so 10 000 rows used to take minutes). What was read by then is shown as a truncated window with a warning, and the notification reports progress (“1 234 of 10 000 rows”).
 - **Medium collections are read in one helper call.** A `List<Employee>` of 1,000 items used to be read element by element and came back cut at 962 rows; the C#/F# fast path now serializes the whole page through the helper into a temporary file and reads it from disk.
-- **C#/F# filters travel as JSON.** A pushed down condition returned a `List<T>` while the payload reader expects JSON, so the whole collection filter could not parse the answer for C#/F#. The condition is serialized now (`JsonSerializer.Serialize`).
 - **A failed evaluation is no longer mistaken for a value.** vsdbg answers a failed `evaluate` with a successful response that carries the exception as the value and only flags it in the presentation hint; the client now reports that as a failure, so a missing helper assembly says “helper load failed: … FileNotFoundException” instead of a confusing follow-up error.
 - **A missing helper says so instead of guessing.** When the helper cannot be loaded, cannot write its file or the extension cannot read it (a remote target, for example), the capture reports the reason and stops; there is no silent walk and no half read collection.
+- **Filters no longer run inside the debuggee.** The condition was sent to the debugger as a native expression whenever the collection was bigger than the window. That expression returned the whole filtered set at once, which the adapter cuts at about 1 000 characters, so it never parsed the answer — and `System.Text.Json`, used to serialize it for C#/F#, is not referenced by the expression evaluator at all (`error CS0234`), so C#/F# could never filter beyond the window either. Every attempt still cost a debugger round trip and left a warning behind. The condition is now evaluated over the captured rows only: applying it takes milliseconds, needs no request and cannot block the debuggee, and when the collection was cut to the window the result says so and shows how many rows were read.
+- **The condition builder has no OR mode.** `Match all` / `Match any` are gone: conditions are always joined with `&&`, so one filter applies to every fetched row instead of switching between conjunctions. An existing `||` condition is left untouched until it is edited.
+- **Clearing a filter is instant.** The close button on the filter chip asked the host for the whole unfiltered collection again (12–118 MB) and re-rendered twice. The viewer now keeps the captured rows next to the filtered ones, so clearing drops the condition locally: one render, no data transfer.
+- **A render sorts and filters once.** The grid, the status bar and the chart each ran the whole view pipeline (sort, search, column filters) over every captured row, so one keystroke in the search box cost three passes — about 200 ms each for 100 000 rows. The pipeline is computed once per render and shared.
+- **Applying a filter no longer ships the rows twice.** The `filterResult` message carried the whole snapshot *and* the filtered rows, i.e. two copies of everything: 23 MB for 10 000 rows, 118 MB for 50 000 and 236 MB for 100 000, structured-cloned into the webview on every Apply. The message now carries the rows once and the webview keeps no second copy, which is what made a filtered view of a big collection freeze.
 - **The filter builder no longer shows a dead “Enter a value” box.** That grey field was the preview of the generated expression, drawn empty until a condition was complete; it now appears only when there is something to show, so the window holds no control that cannot be used.
 - **A response the adapter cut is no longer mistaken for a small collection.** Adapters such as js-debug elide long `evaluate` results in the middle with `…`, and that text still parses as JSON — with mangled members and missing rows. Such a page is now recognised and re-requested smaller, and the page size converges to what the adapter delivers intact.
 - **Large collections are read in bulk.** JavaScript/TypeScript rows are built from adapter previews in one or two requests; C#/F# pages are serialized by the helper into a temporary file in a single request, so the length of an `evaluate` string no longer limits the capture.

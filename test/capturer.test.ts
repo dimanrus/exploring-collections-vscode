@@ -280,7 +280,6 @@ function filterRequest(
     formatOptions,
     helperOptions: { depth: 5 },
     helperState: { attempted: true, loaded: false },
-    enablePushdown: true,
     layout,
     logger: silentLogger,
     ...overrides
@@ -314,7 +313,7 @@ describe('capture through a serializer (fast path)', () => {
       weatherTree(),
       (expression) =>
         expression.startsWith('System.Reflection.Assembly.LoadFrom')
-          ? { ok: true, result: '{ExploringCollections.Helper, Version=1.0.0.0}' }
+          ? { ok: true, result: '{ExploringCollections.Helper, Version=1.1.0.0}' }
           : undefined,
       { file: (start, count) => weatherPayload(start, count) }
     );
@@ -881,69 +880,50 @@ describe('filtering a snapshot', () => {
     const dap = fastWeatherDap();
     const snapshot = await captureCollection(captureRequest(dap));
 
+    const before = dap.evaluated.length;
     const outcome = await filterCollection(filterRequest(dap, snapshot, 'x => x.City == "Seoul"'));
 
-    assert.equal(outcome.result.location, 'client');
+    assert.equal(dap.evaluated.length, before, 'a filter must not evaluate anything in the debuggee');
     assert.ok(outcome.result.rows.length > 0);
     assert.ok(outcome.result.rows.length < snapshot.rows.length);
     for (const row of outcome.result.rows) {
       assert.equal(row.cells[1]!.text, 'Seoul');
     }
     assert.equal(outcome.snapshot.rows.length, outcome.result.rows.length);
-    assert.equal(dap.evaluated.filter((expression) => expression.includes('Enumerable.Where')).length, 0);
+    assert.deepEqual(outcome.result.warnings, []);
   });
 
-  it('pushes an exact filter down when the window is incomplete', async () => {
-    const pushed = [
-      { City: 'Sofia', DegreeCelsius: 24, Feels: 'normal' },
-      { City: 'Houston', DegreeCelsius: 22, Feels: 'normal' }
-    ];
-    const dap = fastWeatherDap((expression) =>
-      expression.includes('Enumerable.Where')
-        ? { ok: true, result: JSON.stringify({ __ec: 1, kind: 'sequence', total: pushed.length, items: pushed }) }
-        : undefined
-    );
+  it('filters a cut window locally and says how much was read', async () => {
+    const dap = fastWeatherDap();
     const captured = await captureCollection(captureRequest(dap, { options: { ...options, maxRows: 3 } }));
     assert.equal(captured.truncated, true);
+    const before = dap.evaluated.length;
 
-    const outcome = await filterCollection(filterRequest(dap, captured, 'x => x.DegreeCelsius > 20'));
+    const outcome = await filterCollection(filterRequest(dap, captured, 'x => x.DegreeCelsius > 0'));
 
-    assert.equal(outcome.result.location, 'debugger');
-    assert.equal(outcome.result.rows.length, 2);
-    assert.match(outcome.result.executed, /Enumerable\.Where/);
+    assert.equal(dap.evaluated.length, before, 'a filter must not evaluate anything in the debuggee');
+    assert.ok(outcome.result.rows.length <= captured.rows.length);
+    assert.ok(
+      outcome.result.warnings.some((warning) => warning.includes('fetched rows were filtered')),
+      `expected a window warning, got ${JSON.stringify(outcome.result.warnings)}`
+    );
     assert.deepEqual(
       outcome.snapshot.columns.map((column) => column.key),
       captured.columns.map((column) => column.key),
-      'columns stay stable after a pushdown'
+      'columns stay stable after filtering'
     );
   });
 
-  it('does not push down a filter that cannot be translated exactly', async () => {
+  it('filters helper functions over the fetched rows', async () => {
     const dap = fastWeatherDap();
-    const captured = await captureCollection(captureRequest(dap, { options: { ...options, maxRows: 3 } }));
+    const snapshot = await captureCollection(captureRequest(dap));
 
-    const outcome = await filterCollection(filterRequest(dap, captured, 'x => like(x.City, "S%")'));
+    const outcome = await filterCollection(filterRequest(dap, snapshot, 'x => like(x.City, "S%")'));
 
-    assert.equal(outcome.result.location, 'client');
-    assert.ok(
-      outcome.result.warnings.some((warning) => warning.includes('exactly')),
-      `expected an exactness warning, got ${JSON.stringify(outcome.result.warnings)}`
-    );
-    assert.equal(dap.evaluated.filter((expression) => expression.includes('Enumerable.Where')).length, 0);
-  });
-
-  it('falls back to the client when the pushdown request fails', async () => {
-    const dap = fastWeatherDap((expression) =>
-      expression.includes('Enumerable.Where')
-        ? { ok: false, error: 'the expression evaluator does not support lambda expressions' }
-        : undefined
-    );
-    const captured = await captureCollection(captureRequest(dap, { options: { ...options, maxRows: 3 } }));
-
-    const outcome = await filterCollection(filterRequest(dap, captured, 'x => x.City == "Seoul"'));
-
-    assert.equal(outcome.result.location, 'client');
-    assert.ok(outcome.result.warnings.some((warning) => warning.includes('Pushdown failed')));
+    assert.ok(outcome.result.rows.length > 0);
+    for (const row of outcome.result.rows) {
+      assert.equal(row.cells[1]!.text.startsWith('S'), true);
+    }
   });
 
   it('resolves free identifiers through the debugger', async () => {
@@ -971,21 +951,6 @@ describe('filtering a snapshot', () => {
     );
   });
 
-  it('warns when the window is incomplete and pushdown is disabled', async () => {
-    const dap = fastWeatherDap();
-    const captured = await captureCollection(captureRequest(dap, { options: { ...options, maxRows: 3 } }));
-
-    const outcome = await filterCollection(
-      filterRequest(dap, captured, 'x => x.City == "Seoul"', { enablePushdown: false })
-    );
-
-    assert.equal(outcome.result.location, 'client');
-    assert.ok(
-      outcome.result.warnings.some((warning) => warning.includes('larger than the fetched window')),
-      `expected a window warning, got ${JSON.stringify(outcome.result.warnings)}`
-    );
-  });
-
   it('keeps every fetched row when the filter is cleared', async () => {
     const dap = fastWeatherDap();
     const snapshot = await captureCollection(captureRequest(dap));
@@ -993,7 +958,6 @@ describe('filtering a snapshot', () => {
     const outcome = await filterCollection(filterRequest(dap, snapshot, '   '));
 
     assert.equal(outcome.result.rows.length, snapshot.rows.length);
-    assert.equal(outcome.result.location, 'client');
     assert.equal(outcome.result.executed, '');
   });
 

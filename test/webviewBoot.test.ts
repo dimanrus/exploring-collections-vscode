@@ -147,17 +147,15 @@ function localizedStrings(): LocalizedStrings {
       resizeDetail: 'Drag to change the width of the details',
       activeFilter: 'Active filter',
       valueEmpty: 'Select a row to inspect its value.',
-      filterBuilderTitle: 'Filter the whole collection',
+      filterBuilderTitle: 'Filter rows with a condition',
       filterWholeCollection:
-        'The condition is applied to every element, not only to the rows that were fetched.',
+        'The condition is applied to every fetched row. When the collection did not fit the window, only that window can match.',
       addCondition: 'Add condition',
       removeCondition: 'Remove condition',
       filterColumn: 'Column',
       filterOperator: 'Operator',
       filterValue: 'Value',
       filterValueTo: 'to',
-      matchAll: 'Match all',
-      matchAny: 'Match any',
       filterOperators: {
         contains: 'contains',
         notContains: 'does not contain',
@@ -328,13 +326,9 @@ describe('the webview bundle actually boots', () => {
   it('re-renders when a filter result arrives', () => {
     webview.send({
       type: 'filterResult',
-      snapshot: { ...snapshot(), rows: [snapshot().rows[0]!] },
-      filter: {
-        rows: [snapshot().rows[0]!],
-        executed: 'x => x.City == "Seoul"',
-        location: 'debugger',
-        warnings: []
-      }
+      text: 'x => x.City == "Seoul"',
+      rows: [snapshot().rows[0]!],
+      filter: { executed: 'x => x.City == "Seoul"', warnings: [] }
     } as HostMessage);
 
     const text = webview.text();
@@ -353,7 +347,7 @@ describe('the webview bundle actually boots', () => {
   });
 });
 
-describe('the whole collection filter builder', () => {
+describe('the condition builder', () => {
   let webview: BootedWebview;
 
   const document = () => webview.dom.window.document;
@@ -381,7 +375,7 @@ describe('the whole collection filter builder', () => {
 
   it('opens from the button next to the search', () => {
     const button = [...document().querySelectorAll('button')].find((candidate) =>
-      ((candidate as HTMLElement).title || '').includes('whole collection')
+      ((candidate as HTMLElement).title || '').includes('Filter rows with a condition')
     );
     assert.ok(button, 'the filter button must be in the filter bar');
     click(button);
@@ -389,9 +383,9 @@ describe('the whole collection filter builder', () => {
     assert.ok(document().querySelector('.filter-builder'), 'the builder popover must open');
     assert.ok(
       (document().querySelector('.filter-builder-hint')?.textContent ?? '').includes(
-        'applied to every element'
+        'applied to every fetched row'
       ),
-      'the builder must say that it filters the whole collection'
+      'the builder must not promise more than the captured rows'
     );
     const preview = document().querySelector('.filter-preview') as HTMLElement;
     assert.equal(
@@ -423,16 +417,85 @@ describe('the whole collection filter builder', () => {
     assert.equal(document().querySelector('.filter-builder'), null, 'the popover closes on apply');
   });
 
-  it('shows the applied condition as a chip', () => {
+  it('shows the applied condition as a chip once the host answers', () => {
+    webview.send({
+      type: 'filterResult',
+      text: 'contains(x.City, "Seoul")',
+      rows: [snapshot().rows[0]!],
+      filter: { executed: 'contains(x.City, "Seoul")', warnings: [] }
+    } as HostMessage);
+
     assert.match(
       document().querySelector('.filter-chip')?.textContent ?? '',
       /contains\(x\.City, "Seoul"\)/
     );
+    assert.match(
+      document().querySelector('.status-bar')?.textContent ?? '',
+      /1–1 of 1 rows/,
+      'the viewer must show the rows the host sent'
+    );
   });
 
-  it('adds a second condition with another combinator', async () => {
+  it('shows one chip per condition and removes them one by one', async () => {
+    webview.send({
+      type: 'filterResult',
+      text: 'contains(x.City, "Seoul") && (x.Degree >= 10 && x.Degree <= 30)',
+      rows: [snapshot().rows[0]!],
+      filter: {
+        executed: 'contains(x.City, "Seoul") && (x.Degree >= 10 && x.Degree <= 30)',
+        warnings: []
+      }
+    } as HostMessage);
+
+    const chips = [...document().querySelectorAll('.filter-chip')];
+    assert.equal(chips.length, 2, 'a range stays one chip, the other condition is its own');
+    assert.match(chips[0]?.textContent ?? '', /contains\(x\.City, "Seoul"\)/);
+    assert.match(chips[1]?.textContent ?? '', /\(x\.Degree >= 10 && x\.Degree <= 30\)/);
+
+    // Removing the first condition keeps the second one applied.
+    click(chips[0]?.querySelector('.chip-close'));
+    await settle();
+
+    assert.equal(
+      lastApply()?.text,
+      '(x.Degree >= 10 && x.Degree <= 30)',
+      'only the removed condition must leave the filter'
+    );
+
+    // Removing the last one clears the filter altogether.
+    webview.send({
+      type: 'filterResult',
+      text: '(x.Degree >= 10 && x.Degree <= 30)',
+      rows: [snapshot().rows[0]!],
+      filter: { executed: '(x.Degree >= 10 && x.Degree <= 30)', warnings: [] }
+    } as HostMessage);
+    click(document().querySelector('.filter-chip .chip-close'));
+    await settle();
+
+    assert.equal(lastApply()?.text, '', 'the last chip clears the filter');
+  });
+
+  it('drops the condition when the host answers a clear', () => {
+    webview.send({ type: 'filterCleared' } as HostMessage);
+
+    assert.equal(document().querySelector('.filter-chip'), null, 'the chip must disappear');
+    assert.match(
+      document().querySelector('.status-bar')?.textContent ?? '',
+      /1–100 of 300 rows/,
+      'the unfiltered rows must be back'
+    );
+  });
+
+  it('adds a second condition and joins both with AND', async () => {
+    webview.send({
+      type: 'filterResult',
+      text: 'contains(x.City, "Seoul")',
+      rows: [snapshot().rows[0]!],
+      filter: { executed: 'contains(x.City, "Seoul")', warnings: [] }
+    } as HostMessage);
+
     const button = [...document().querySelectorAll('button')].find((candidate) =>
-      ((candidate as HTMLElement).title || '').includes('whole collection')
+      ((candidate as HTMLElement).title || '').includes('Filter rows with a condition')
     );
     click(button);
 
@@ -450,8 +513,6 @@ describe('the whole collection filter builder', () => {
     const secondValue = rows[1]?.querySelector('.filter-value') as HTMLInputElement;
     secondValue.value = '20';
     secondValue.dispatchEvent(new webview.dom.window.Event('input', { bubbles: true }));
-    const or = [...document().querySelectorAll('.filter-builder input[type="radio"]')][1] as HTMLInputElement;
-    or.click();
 
     click(
       [...document().querySelectorAll('.filter-builder button')].find(
@@ -462,14 +523,19 @@ describe('the whole collection filter builder', () => {
 
     assert.equal(
       lastApply()?.text,
-      'contains(x.City, "Seoul") || x.Degree >= 20',
-      'the combinator and both conditions must reach the host'
+      'contains(x.City, "Seoul") && x.Degree >= 20',
+      'both conditions must reach the host, joined with AND'
+    );
+    assert.equal(
+      document().querySelectorAll('.filter-builder input[type="radio"]').length,
+      0,
+      'the builder must offer no match-all/match-any switch'
     );
   });
 
   it('clears the filter from the builder', async () => {
     const button = [...document().querySelectorAll('button')].find((candidate) =>
-      ((candidate as HTMLElement).title || '').includes('whole collection')
+      ((candidate as HTMLElement).title || '').includes('Filter rows with a condition')
     );
     click(button);
     click(

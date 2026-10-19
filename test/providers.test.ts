@@ -2,11 +2,9 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createProviderRegistry, helperRelativePath } from '../src/providers';
-import type { HelperOptions, LanguageProvider, ProviderMatchContext } from '../src/providers/languageProvider';
+import type { LanguageProvider, ProviderMatchContext } from '../src/providers/languageProvider';
 import { languageFromPath, toLanguageId } from '../src/providers/languageProvider';
 import { buildJavaScriptSerializer } from '../src/providers/javascriptProvider';
-import { emitBody } from '../src/filter/emit';
-import { parseFilter } from '../src/filter/expression';
 import { buildXlsx } from '../src/export/xlsx';
 
 const registry = createProviderRegistry();
@@ -20,11 +18,6 @@ function match(context: Partial<ProviderMatchContext>): LanguageProvider | undef
     editorLanguageId: context.editorLanguageId
   });
 }
-
-const helperOptions: HelperOptions = {
-  depth: 6,
-  helperPath: (relative) => `/extension/helpers/${relative}`
-};
 
 describe('provider resolution', () => {
   it('exposes the supported languages', () => {
@@ -116,15 +109,6 @@ describe('provider resolution', () => {
 });
 
 describe('provider expressions', () => {
-  const bodyOf = (text: string) => {
-    const parsed = parseFilter(text);
-    return {
-      body: parsed.expression.kind === 'lambda' ? parsed.expression.body : parsed.expression,
-      parameter: parsed.parameter ?? 'x',
-      canonical: text
-    };
-  };
-
   it('uses the helper file and the helper load expression for .NET', () => {
     const provider = registry.byId('csharp')!;
     assert.match(
@@ -135,25 +119,6 @@ describe('provider expressions', () => {
       provider.buildHelperLoadExpression!('/x/helper.dll') ?? '',
       /Assembly\.LoadFrom\("\/x\/helper\.dll"\)/
     );
-  });
-
-  it('builds C# and F# pushdown expressions', () => {
-    const csharp = registry.byId('csharp')!;
-    const csharpFilter = csharp.buildFilterExpression!('temperatures', bodyOf('x => x.City == "Seoul"'), helperOptions);
-    assert.match(csharpFilter!.expression, /System\.Linq\.Enumerable\.Where\(temperatures, x => x\.City == "Seoul"\)/);
-    assert.equal(csharpFilter!.exact, true);
-
-    const fsharp = registry.byId('fsharp')!;
-    const fsharpFilter = fsharp.buildFilterExpression!('temperatures', bodyOf('x => x.City == "Seoul"'), helperOptions);
-    assert.match(fsharpFilter!.expression, /Seq\.filter \(fun x -> x\.City = "Seoul"\) temperatures/);
-    assert.equal(fsharpFilter!.exact, true);
-  });
-
-  it('refuses pushdown for filters that cannot be translated exactly', () => {
-    const csharp = registry.byId('csharp')!;
-    const translation = csharp.buildFilterExpression!('temperatures', bodyOf('x => like(x.City, "S%")'), helperOptions);
-    assert.equal(translation!.exact, false);
-    assert.ok(translation!.notes.length > 0);
   });
 
   it('generates a JavaScript serializer that the debuggee can parse and run', () => {
@@ -256,28 +221,6 @@ describe('provider expressions', () => {
       assert.ok(provider.notes.length > 0, `${provider.id} must describe its limitations`);
       assert.ok(provider.debugTypes.length > 0 || provider.editorLanguages.length > 0);
     }
-  });
-
-  it('exposes the emitter used by the F# pushdown path', () => {
-    const fsharp = registry.byId('fsharp')!;
-    const parsed = parseFilter('x => x.City == "Seoul"');
-    const body = parsed.expression.kind === 'lambda' ? parsed.expression.body : parsed.expression;
-    const emitted = emitBody(body, { sourceParameter: 'x', targetParameter: 'x', dialect: {
-      equality: '=',
-      inequality: '<>',
-      and: '&&',
-      or: '||',
-      not: 'not ',
-      nullLiteral: 'null',
-      booleanLiteral: (value) => (value ? 'true' : 'false')
-    } });
-    const translated = fsharp.buildFilterExpression!('src', {
-      body,
-      parameter: 'x',
-      canonical: 'x => x.City == "Seoul"'
-    }, helperOptions)!;
-    assert.equal(emitted.text, 'x.City = "Seoul"');
-    assert.match(translated.expression, /x\.City = "Seoul"/);
   });
 
   it('keeps the xlsx builder reachable from the provider layer', () => {

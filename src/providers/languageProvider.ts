@@ -1,5 +1,4 @@
 import type { ElementNode } from '../model/snapshotBuilder';
-import type { FilterExpression } from '../filter/expression';
 
 export type LanguageId = 'csharp' | 'fsharp' | 'javascript' | 'typescript';
 
@@ -36,31 +35,8 @@ export interface HelperOptions {
   depth: number;
 }
 
-/** Result of translating a canonical filter into a target language. */
-export interface FilterTranslation {
-  /** Expression to evaluate inside the debuggee. */
-  expression: string;
-  /**
-   * False when the translation might change semantics (for instance when a
-   * helper function is approximated). Pushdown is only attempted when the
-   * translation is exact; otherwise filtering happens on the fetched rows.
-   */
-  exact: boolean;
-  notes: string[];
-}
-
-/** Structured filter handed to a provider for pushdown. */
-export interface FilterEmitInput {
-  /** AST of the lambda body. */
-  body: FilterExpression;
-  /** Lambda parameter name, `x` by convention. */
-  parameter: string;
-  /** Canonical text of the body, useful for diagnostics. */
-  canonical: string;
-}
-
 /**
- * A language provider adapts the canonical collection model to one debug
+ * Provider adapts the canonical collection model to one debug
  * ecosystem. Providers only describe *how to talk* to the debugger; the shared
  * capture engine in {@link ../providers/capturer} drives the conversation.
  *
@@ -129,13 +105,6 @@ export interface LanguageProvider {
    * Returning `undefined` means "not parseable, try the next candidate".
    */
   parseSerializedPayload?(payload: string): ElementNode[] | undefined;
-
-  /** Builds a filter expression that runs inside the debuggee. */
-  buildFilterExpression?(
-    source: string,
-    filter: FilterEmitInput,
-    options: HelperOptions
-  ): FilterTranslation | undefined;
 
   /**
    * Builds an expression that serializes a page into a local file and returns

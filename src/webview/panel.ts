@@ -253,7 +253,12 @@ export class CollectionViewPanel implements vscode.Disposable {
               return;
             }
             this.viewSnapshot = outcome.snapshot;
-            this.post({ type: 'filterResult', snapshot: this.viewSnapshot, filter: outcome.result });
+            this.post({
+              type: 'filterResult',
+              text: message.text,
+              rows: this.viewSnapshot.rows,
+              filter: { executed: outcome.result.executed, warnings: outcome.result.warnings }
+            });
             for (const warning of outcome.result.warnings) {
               this.logger.warn(`filter warning: ${warning}`);
             }
@@ -315,15 +320,13 @@ export class CollectionViewPanel implements vscode.Disposable {
     }
   }
 
+  /**
+   * Drops the filter. The viewer kept the unfiltered rows, so this only tells it
+   * to show them again: no rows travel and nothing is rendered twice.
+   */
   private resetFilter(): void {
     this.viewSnapshot = this.baseSnapshot;
-    this.post({
-      type: 'filterResult',
-      snapshot: this.viewSnapshot,
-      filter: { rows: this.viewSnapshot.rows, executed: '', location: 'client', warnings: [] }
-    });
-    // Clears the chip in the filter bar, whatever asked for the reset.
-    this.post({ type: 'filterApplied', text: '' });
+    this.post({ type: 'filterCleared' });
   }
 
   private async withBusy(label: string, action: () => Promise<void>): Promise<void> {

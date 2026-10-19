@@ -28,7 +28,6 @@
   "configuration.maxDepth.description": "Сколько уровней вложенных контейнеров разворачивается в колонки. Более глубокие уровни остаются раскрываемыми в панели значений.",
   "configuration.fetchConcurrency.description": "Число одновременных запросов `variables` к адаптеру отладки.",
   "configuration.timeoutMs.description": "Тайм-аут одного запроса к адаптеру отладки в миллисекундах.",
-  "configuration.enableFilterPushdown.description": "Передавать фильтры в отладчик как нативные выражения, чтобы совпадать могли элементы за пределами загруженного окна.",
   "configuration.enableCharts.description": "Включить построение графиков девяти типов.",
   "configuration.showInlineHints.description": "Показывать однострочную подсказку рядом с остановившейся строкой со списком коллекций текущего кадра.",
   "configuration.showCodeLens.description": "Показывать CodeLens `Explore collection` над каждой коллекцией, доступной в текущем кадре на точке останова.",

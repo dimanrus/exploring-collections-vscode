@@ -14,7 +14,6 @@ export interface ExtensionSettings {
   maxDepth: number;
   fetchConcurrency: number;
   timeoutMs: number;
-  enableFilterPushdown: boolean;
   enableCharts: boolean;
   showInlineHints: boolean;
   showCodeLens: boolean;
@@ -37,7 +36,6 @@ const DEFAULTS: ExtensionSettings = {
   maxDepth: 3,
   fetchConcurrency: 8,
   timeoutMs: 20000,
-  enableFilterPushdown: true,
   enableCharts: true,
   showInlineHints: true,
   showCodeLens: true,
@@ -83,7 +81,6 @@ export function readSettings(): ExtensionSettings {
       DEFAULTS.fetchConcurrency
     ),
     timeoutMs: clamp(configuration.get<number>('timeoutMs', DEFAULTS.timeoutMs), 1000, 600000, DEFAULTS.timeoutMs),
-    enableFilterPushdown: configuration.get<boolean>('enableFilterPushdown', DEFAULTS.enableFilterPushdown),
     enableCharts: configuration.get<boolean>('enableCharts', DEFAULTS.enableCharts),
     showInlineHints: configuration.get<boolean>('showInlineHints', DEFAULTS.showInlineHints),
     showCodeLens: configuration.get<boolean>('showCodeLens', DEFAULTS.showCodeLens),

@@ -1,9 +1,7 @@
 import type { ElementNode } from '../model/snapshotBuilder';
-import { emitBody } from '../filter/emit';
-import { JAVASCRIPT_DIALECT } from '../filter/dialects';
 import { AbstractLanguageProvider, quoteForSource } from './baseProvider';
 import { elementsFromPayload } from './jsonPayload';
-import type { FilterEmitInput, FilterTranslation, HelperOptions, LanguageId } from './languageProvider';
+import type { HelperOptions, LanguageId } from './languageProvider';
 
 /** Debug types owned by the JavaScript debug adapters (js-debug, Chrome, Node). */
 export const JS_DEBUG_TYPES = [
@@ -98,15 +96,6 @@ export class JavaScriptProvider extends AbstractLanguageProvider {
 
   override parseSerializedPayload(payload: string): ElementNode[] | undefined {
     return elementsFromPayload(payload, Number.MAX_SAFE_INTEGER);
-  }
-
-  override buildFilterExpression(source: string, filter: FilterEmitInput): FilterTranslation {
-    const emitted = emitBody(filter.body, { sourceParameter: filter.parameter, targetParameter: 'x', dialect: JAVASCRIPT_DIALECT });
-    return {
-      expression: buildJavaScriptSerializer(`(${source}).filter(x => ${emitted.text})`, 6, 100000),
-      exact: emitted.exact,
-      notes: emitted.notes
-    };
   }
 
   override buildMemberExpression(source: string, path: readonly string[]): string {

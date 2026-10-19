@@ -371,8 +371,8 @@ class Parser {
       case 'number':
         return { kind: 'literal', value: parseNumberLiteral(token.value), raw: token.value };
       case 'string':
-        // `raw` keeps a quoted, escaped form so the literal can be re-emitted for
-        // another language (native pushdown) without corrupting its content.
+        // `raw` keeps a quoted, escaped form so the literal can be printed back
+        // (chips, diagnostics, saved conditions) without corrupting its content.
         return { kind: 'literal', value: token.value, raw: quoteString(token.value) };
       case 'boolean':
         return { kind: 'literal', value: token.value === 'true', raw: token.value };
@@ -520,6 +520,62 @@ class Parser {
     const previous = this.tokens[this.index - 1];
     return previous ? previous.position + previous.value.length : 0;
   }
+}
+
+/**
+ * Splits a condition into its top level `&&` parts.
+ *
+ * Parentheses are respected, so a range the builder produces
+ * (`x.Age >= 18 && x.Age <= 65`, wrapped when joined) stays one part and a
+ * quoted `&&` inside a string literal is not a separator. The viewer shows one
+ * chip per part so each condition can be removed on its own.
+ */
+export function splitConditionParts(text: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let quote: string | undefined;
+  let start = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index] as string;
+    if (quote !== undefined) {
+      if (character === '\\') {
+        index += 1;
+      } else if (character === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === '(' || character === '[') {
+      depth += 1;
+      continue;
+    }
+    if (character === ')' || character === ']') {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    if (depth === 0 && text.startsWith('&&', index)) {
+      const part = text.slice(start, index).trim();
+      if (part.length > 0) {
+        parts.push(part);
+      }
+      index += 1;
+      start = index + 1;
+    }
+  }
+  const last = text.slice(start).trim();
+  if (last.length > 0) {
+    parts.push(last);
+  }
+  return parts;
+}
+
+/** Rebuilds a condition from its parts, the inverse of {@link splitConditionParts}. */
+export function joinConditionParts(parts: readonly string[]): string {
+  return parts.map((part) => part.trim()).filter((part) => part.length > 0).join(' && ');
 }
 
 /** Quotes and escapes a string so it can be emitted as source code. */

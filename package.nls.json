@@ -28,7 +28,6 @@
   "configuration.maxDepth.description": "How many nested container levels are flattened into columns. Deeper levels stay expandable in the value pane.",
   "configuration.fetchConcurrency.description": "Number of concurrent `variables` requests sent to the debug adapter.",
   "configuration.timeoutMs.description": "Timeout of a single debug adapter request in milliseconds.",
-  "configuration.enableFilterPushdown.description": "Push filters down into the debugger as native expressions so that elements outside the fetched window can match.",
   "configuration.enableCharts.description": "Enable the chart view with the nine chart types.",
   "configuration.showInlineHints.description": "Show a one line hint next to the stopped statement listing the collections of the current frame.",
   "configuration.showCodeLens.description": "Show an `Explore collection` CodeLens above every collection that is in scope at the current breakpoint.",

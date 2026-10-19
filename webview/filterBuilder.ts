@@ -4,13 +4,13 @@ import { parseFilter, quoteString } from '../src/filter/expression';
 import { clear, el, icon } from './dom';
 
 /**
- * The whole collection filter builder.
+ * The condition builder.
  *
- * The viewer's own controls (search, per column filters, sorting) only ever see
- * the rows that were fetched. This builder instead produces a condition that is
- * applied to the whole collection: the extension translates it into the debugger's
- * own language when it can (`.Where`, `Seq.filter`, `Array.filter`, a list
- * comprehension), so a truncated collection can be searched beyond its window.
+ * The viewer's own controls (search, per column filters, sorting) match text in
+ * a cell. This builder instead produces one condition over whole rows, in a
+ * single syntax for every language (`contains(x.City, "Seoul")`,
+ * `x.Salary > 40 && x.Remote`), which the extension evaluates over the captured
+ * rows without asking the debugger for anything.
  */
 
 export type FilterOperator =
@@ -32,8 +32,6 @@ export type FilterOperator =
   | 'isFalse'
   | 'isNull'
   | 'isNotNull';
-
-export type FilterCombinator = 'and' | 'or';
 
 /** One row of the builder. */
 export interface FilterCondition {
@@ -250,7 +248,6 @@ export function buildConditionText(
 /** Builds the filter text of every complete condition. */
 export function buildFilterText(
   conditions: readonly FilterCondition[],
-  combinator: FilterCombinator,
   columns: readonly ColumnDescriptor[]
 ): string {
   const byKey = new Map(columns.map((column) => [column.key, column]));
@@ -266,7 +263,8 @@ export function buildFilterText(
   }
   // A range is two comparisons that must stay together, so it is wrapped.
   const wrapped = parts.map((part) => (part.includes(' && ') ? `(${part})` : part));
-  return wrapped.join(combinator === 'and' ? ' && ' : ' || ');
+  // One condition set, always a conjunction: the builder has no OR mode.
+  return wrapped.join(' && ');
 }
 
 /** Reads a condition back out of an expression, when it has a known shape. */
@@ -383,7 +381,6 @@ function memberPathOf(expression: FilterExpression): string | undefined {
 
 export interface ParsedConditions {
   conditions: FilterCondition[];
-  combinator: FilterCombinator;
 }
 
 /**
@@ -396,7 +393,7 @@ export function conditionsFromText(
   columns: readonly ColumnDescriptor[]
 ): ParsedConditions | undefined {
   if (text.trim().length === 0) {
-    return { conditions: [], combinator: 'and' };
+    return { conditions: [] };
   }
   let parsed: ParsedFilter;
   try {
@@ -408,7 +405,6 @@ export function conditionsFromText(
   const body = parsed.expression.kind === 'lambda' ? parsed.expression.body : parsed.expression;
   const byKey = new Map(columns.map((column) => [column.key, column]));
   const conditions: FilterCondition[] = [];
-  const combinators = new Set<FilterCombinator>();
 
   const visit = (expression: FilterExpression): boolean => {
     if (expression.kind === 'binary' && (expression.operator === '&&' || expression.operator === '||')) {
@@ -418,7 +414,10 @@ export function conditionsFromText(
         conditions.push(whole);
         return true;
       }
-      combinators.add(expression.operator === '&&' ? 'and' : 'or');
+      // An OR cannot be represented: the builder only joins conditions with AND.
+      if (expression.operator === '||') {
+        return false;
+      }
       return visit(expression.left) && visit(expression.right);
     }
     const single = wholeCondition(expression);
@@ -459,13 +458,7 @@ export function conditionsFromText(
   if (!visit(body)) {
     return undefined;
   }
-  if (combinators.size > 1) {
-    return undefined;
-  }
-  return {
-    conditions,
-    combinator: combinators.has('or') ? 'or' : 'and'
-  };
+  return { conditions };
 }
 
 /** Strings the builder needs, resolved by the host. */
@@ -477,8 +470,6 @@ export interface FilterBuilderStrings {
   operator: string;
   value: string;
   valueTo: string;
-  matchAll: string;
-  matchAny: string;
   apply: string;
   clear: string;
   cancel: string;
@@ -504,8 +495,7 @@ export function renderFilterBuilder(options: {
   const { columns, strings, callbacks } = options;
   const usable = filterableColumns(columns);
   const draft = {
-    conditions: (options.parsed?.conditions ?? []).map((condition) => ({ ...condition })),
-    combinator: options.parsed?.combinator ?? 'and'
+    conditions: (options.parsed?.conditions ?? []).map((condition) => ({ ...condition }))
   };
   if (draft.conditions.length === 0) {
     draft.conditions.push(createCondition(columns));
@@ -537,7 +527,7 @@ export function renderFilterBuilder(options: {
   let previewNode: HTMLElement | undefined;
   let applyButton: HTMLButtonElement | undefined;
   const refreshPreview = (): void => {
-    const text = buildFilterText(draft.conditions, draft.combinator, columns);
+    const text = buildFilterText(draft.conditions, columns);
     if (previewNode) {
       previewNode.textContent = text;
       previewNode.title = text;
@@ -657,22 +647,6 @@ export function renderFilterBuilder(options: {
   const renderFooter = (): void => {
     clear(footer);
 
-    const combinator = el('div', { class: 'radio-row' });
-    const group = 'ec-filter-combinator';
-    const all = el('input', { type: 'radio', name: group, checked: draft.combinator === 'and' });
-    const any = el('input', { type: 'radio', name: group, checked: draft.combinator === 'or' });
-    all.addEventListener('change', () => {
-      draft.combinator = 'and';
-      refreshPreview();
-    });
-    any.addEventListener('change', () => {
-      draft.combinator = 'or';
-      refreshPreview();
-    });
-    combinator.appendChild(el('label', {}, [all, el('span', {}, [strings.matchAll])]));
-    combinator.appendChild(el('label', {}, [any, el('span', {}, [strings.matchAny])]));
-    footer.appendChild(combinator);
-
     const add = el('button', { class: 'link-button', type: 'button' }, [`+ ${strings.addCondition}`]);
     add.addEventListener('click', () => {
       const previous = draft.conditions[draft.conditions.length - 1];
@@ -694,7 +668,7 @@ export function renderFilterBuilder(options: {
     cancel.addEventListener('click', () => options.closePopovers());
     applyButton = el('button', { class: 'primary-button', type: 'button' }, [strings.apply]);
     applyButton.addEventListener('click', () => {
-      const text = buildFilterText(draft.conditions, draft.combinator, columns);
+      const text = buildFilterText(draft.conditions, columns);
       options.closePopovers();
       callbacks.onApply(text);
     });

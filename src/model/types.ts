@@ -143,11 +143,9 @@ export interface CollectionSnapshot {
 /** Result of a filter evaluation, either pushed down or evaluated locally. */
 export interface FilterResult {
   rows: RowDescriptor[];
-  /** Text of the expression actually executed, for diagnostics. */
+  /** Text of the condition that ran, for diagnostics. */
   executed: string;
-  /** Where the expression ran. */
-  location: 'debugger' | 'client';
-  /** Non fatal problems, e.g. unsupported functions. */
+  /** Non fatal problems, e.g. a window that was smaller than the collection. */
   warnings: string[];
 }
 

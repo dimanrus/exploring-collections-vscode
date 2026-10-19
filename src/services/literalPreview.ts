@@ -1307,7 +1307,7 @@ export function filterLiteralSnapshot(
   if (filterText.trim().length === 0) {
     return {
       snapshot,
-      result: { rows: snapshot.rows, executed: '', location: 'client', warnings: [] }
+      result: { rows: snapshot.rows, executed: '', warnings: [] }
     };
   }
   const parsed = parseFilter(filterText);
@@ -1317,7 +1317,6 @@ export function filterLiteralSnapshot(
     result: {
       rows,
       executed: formatExpression(parsed.expression, parsed.parameter ?? 'x'),
-      location: 'client',
       warnings: []
     }
   };

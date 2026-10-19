@@ -46,7 +46,7 @@ function text(overrides: Partial<FilterCondition>): string | undefined {
   );
 }
 
-describe('the whole collection filter builder', () => {
+describe('the condition builder', () => {
   it('offers operators that fit the column kind', () => {
     assert.deepEqual(operatorsForKind('string').slice(0, 4), ['contains', 'notContains', 'equals', 'notEquals']);
     assert.ok(operatorsForKind('string').includes('regex'));
@@ -133,19 +133,15 @@ describe('the whole collection filter builder', () => {
     assert.equal(text({ operator: 'contains', value: '' }), undefined);
   });
 
-  it('joins the conditions with the chosen combinator', () => {
+  it('joins every condition with AND', () => {
     const both = [
       condition({ columnKey: 'City', operator: 'equals', value: 'Seoul' }),
       condition({ columnKey: 'DegreeCelsius', operator: 'gt', value: '20' })
     ];
 
     assert.equal(
-      buildFilterText(both, 'and', columns),
+      buildFilterText(both, columns),
       'x.City == "Seoul" && x.DegreeCelsius > 20'
-    );
-    assert.equal(
-      buildFilterText(both, 'or', columns),
-      'x.City == "Seoul" || x.DegreeCelsius > 20'
     );
   });
 
@@ -155,19 +151,18 @@ describe('the whole collection filter builder', () => {
         condition({ columnKey: 'City', operator: 'equals', value: 'Seoul' }),
         condition({ columnKey: 'DegreeCelsius', operator: 'between', value: '10', value2: '30' })
       ],
-      'or',
       columns
     );
 
     assert.equal(
       text,
-      'x.City == "Seoul" || (x.DegreeCelsius >= 10 && x.DegreeCelsius <= 30)'
+      'x.City == "Seoul" && (x.DegreeCelsius >= 10 && x.DegreeCelsius <= 30)'
     );
   });
 
   it('ignores incomplete conditions and returns nothing when none is usable', () => {
-    assert.equal(buildFilterText([condition({ value: '' })], 'and', columns), '');
-    assert.equal(buildFilterText([], 'and', columns), '');
+    assert.equal(buildFilterText([condition({ value: '' })], columns), '');
+    assert.equal(buildFilterText([], columns), '');
   });
 });
 
@@ -175,7 +170,6 @@ describe('reading a filter back into the builder', () => {
   it('understands the comparisons it produces', () => {
     const long = conditionsFromText('x.City == "Seoul" && x.DegreeCelsius > 20', columns);
 
-    assert.equal(long?.combinator, 'and');
     assert.deepEqual(long?.conditions, [
       { columnKey: 'City', operator: 'equals', value: 'Seoul', value2: '' },
       { columnKey: 'DegreeCelsius', operator: 'gt', value: '20', value2: '' }
@@ -217,13 +211,13 @@ describe('reading a filter back into the builder', () => {
     ]);
   });
 
-  it('reads the combinator', () => {
-    assert.equal(conditionsFromText('x.City == "a" || x.City == "b"', columns)?.combinator, 'or');
-    assert.equal(conditionsFromText('x.City == "a" && x.City == "b"', columns)?.combinator, 'and');
+  it('reads conditions joined with AND', () => {
+    assert.equal(conditionsFromText('x.City == "a" && x.City == "b"', columns)?.conditions.length, 2);
   });
 
   it('gives up on expressions the builder cannot show', () => {
     assert.equal(conditionsFromText('len(x.City) > 2', columns), undefined);
+    assert.equal(conditionsFromText('x.City == "a" || x.City == "b"', columns), undefined);
     assert.equal(conditionsFromText('x.City == "a" && x.Feels == "b" || x.Active == true', columns), undefined);
     assert.equal(conditionsFromText('x.City ==', columns), undefined);
     assert.equal(conditionsFromText('x.Missing == 1', columns), undefined);
@@ -235,7 +229,7 @@ describe('reading a filter back into the builder', () => {
       condition({ columnKey: 'DegreeCelsius', operator: 'between', value: '10', value2: '30' }),
       condition({ columnKey: 'Feels', operator: 'notEmpty' })
     ];
-    const built = buildFilterText(original, 'and', columns);
+    const built = buildFilterText(original, columns);
     const parsed = conditionsFromText(built, columns);
 
     assert.ok(parsed);
@@ -243,10 +237,10 @@ describe('reading a filter back into the builder', () => {
       parsed.conditions.map((entry) => ({ operator: entry.operator, columnKey: entry.columnKey })),
       original.map((entry) => ({ operator: entry.operator, columnKey: entry.columnKey }))
     );
-    assert.equal(buildFilterText(parsed.conditions, parsed.combinator, columns), built);
+    assert.equal(buildFilterText(parsed.conditions, columns), built);
   });
 
   it('treats an empty filter as no condition at all', () => {
-    assert.deepEqual(conditionsFromText('   ', columns), { conditions: [], combinator: 'and' });
+    assert.deepEqual(conditionsFromText('   ', columns), { conditions: [] });
   });
 });

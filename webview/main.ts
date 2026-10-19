@@ -1,6 +1,7 @@
-import type { CollectionSnapshot, ColumnDescriptor } from '../src/model/types';
+import type { CollectionSnapshot, ColumnDescriptor, RowDescriptor } from '../src/model/types';
 import type {
   ColumnFilterState,
+  FilterSummary,
   HostMessage,
   LocalizedStrings,
   ViewState,
@@ -20,7 +21,8 @@ import {
   emptyColumnFilter,
   isColumnFilterActive,
   orderedColumns,
-  runPipeline
+  runPipeline,
+  type PipelineOutcome
 } from './state';
 import { CollectionTable, computeColumnWidths } from './table';
 import {
@@ -28,6 +30,7 @@ import {
   renderFilterBuilder,
   type FilterBuilderStrings
 } from './filterBuilder';
+import { joinConditionParts, splitConditionParts } from '../src/filter/expression';
 import { ValuePane } from './valuePane';
 
 interface VsCodeApi {
@@ -59,7 +62,12 @@ interface AppState {
   selectedRow: number | null;
   selectedColumnKey: string | null;
   busy: boolean;
-  filterInfo: { executed: string; location: 'debugger' | 'client'; warnings: string[] } | undefined;
+  filterInfo: FilterSummary | undefined;
+  /**
+   * Rows of the active condition. `snapshot` keeps the captured rows untouched,
+   * so clearing the filter needs no data from the host.
+   */
+  filteredRows: RowDescriptor[] | undefined;
 }
 
 /** Page size presets of the pager, plus the "show everything" sentinel. */
@@ -77,7 +85,8 @@ const state: AppState = {
   selectedRow: null,
   selectedColumnKey: null,
   busy: false,
-  filterInfo: undefined
+  filterInfo: undefined,
+  filteredRows: undefined
 };
 
 let api: VsCodeApi | undefined;
@@ -159,6 +168,7 @@ function handleHostMessage(message: HostMessage): void {
   switch (message.type) {
     case 'init': {
       state.snapshot = message.snapshot;
+      state.filteredRows = undefined;
       state.providerName = message.providerName;
       state.strings = message.strings;
       state.settings = message.settings;
@@ -168,30 +178,39 @@ function handleHostMessage(message: HostMessage): void {
       state.filterInfo = undefined;
       buildOnce();
       renderAll();
+      // A saved condition has to be applied again, otherwise the chip would
+      // describe a filter the rows do not have.
+      reapplySavedFilter();
       return;
     }
     case 'snapshot': {
       state.snapshot = message.snapshot;
       state.providerName = message.providerName;
       state.filterInfo = undefined;
+      state.filteredRows = undefined;
       renderAll();
+      reapplySavedFilter();
       return;
     }
     case 'filterResult': {
-      if (state.snapshot) {
-        state.snapshot = { ...state.snapshot, rows: message.snapshot.rows };
-      } else {
-        state.snapshot = message.snapshot;
+      if (!state.snapshot) {
+        return;
       }
+      // The captured rows stay in `snapshot`; only the condition's rows are kept
+      // next to them, so clearing the filter is a single render with no transfer.
+      state.filteredRows = message.rows;
       state.filterInfo = message.filter;
+      state.view.filter = message.text;
+      state.view.page = 0;
+      persistViewState();
       renderAll();
       return;
     }
-    case 'filterApplied': {
-      state.view.filter = message.text;
-      if (message.text.trim().length === 0) {
-        state.filterInfo = undefined;
-      }
+    case 'filterCleared': {
+      state.filteredRows = undefined;
+      state.filterInfo = undefined;
+      state.view.filter = '';
+      state.view.page = 0;
       persistViewState();
       renderAll();
       return;
@@ -403,15 +422,34 @@ function clearEmpty(): void {
   placeholder = undefined;
 }
 
+/** Asks the host to run the condition that is stored with the view, if any. */
+function reapplySavedFilter(): void {
+  const text = state.view.filter.trim();
+  if (text.length > 0) {
+    post({ type: 'applyFilter', text });
+  }
+}
+
+/** Rows the viewer shows: the filtered set when a condition is active. */
+function rowsInView(): RowDescriptor[] {
+  return state.filteredRows ?? state.snapshot?.rows ?? [];
+}
+
 function renderAll(): void {
   applyTheme();
   applyLayout();
   renderToolbar();
   renderFilterBar();
-  renderGrid();
+  // The pipeline sorts and filters every captured row, which is measured in
+  // hundreds of milliseconds for a collection of a hundred thousand elements.
+  // It runs once and the three views below share the result.
+  const pipeline = state.snapshot
+    ? runPipeline(rowsInView(), state.snapshot.columns, state.view)
+    : undefined;
+  renderGrid(pipeline);
   renderValuePane();
-  renderChart();
-  renderStatus();
+  renderChart(pipeline);
+  renderStatus(pipeline);
 }
 
 function applyTheme(): void {
@@ -492,17 +530,15 @@ function strings(): LocalizedStrings['toolbar'] {
       resizeDetail: 'Drag to change the width of the details',
       activeFilter: 'Active filter',
       valueEmpty: 'Select a row to inspect its value.',
-      filterBuilderTitle: 'Filter the whole collection',
+      filterBuilderTitle: 'Filter rows with a condition',
       filterWholeCollection:
-        'The condition is applied to every element, not only to the rows that were fetched.',
+        'The condition is applied to every fetched row. When the collection did not fit the window, only that window can match.',
       addCondition: 'Add condition',
       removeCondition: 'Remove condition',
       filterColumn: 'Column',
       filterOperator: 'Operator',
       filterValue: 'Value',
       filterValueTo: 'to',
-      matchAll: 'Match all',
-      matchAny: 'Match any',
       filterOperators: {
         contains: 'contains',
         notContains: 'does not contain',
@@ -635,7 +671,7 @@ function toolbarButton(
 }
 
 /** Small remove button used by the chips in the filter bar. */
-function chipCloseButton(label: string): HTMLButtonElement {
+function chipCloseButton(label: string, action?: () => void): HTMLButtonElement {
   const button = el('button', {
     class: 'chip-close',
     type: 'button',
@@ -645,6 +681,10 @@ function chipCloseButton(label: string): HTMLButtonElement {
   button.appendChild(icon('close', 12));
   button.addEventListener('click', (event) => {
     event.stopPropagation();
+    if (action) {
+      action();
+      return;
+    }
     post({ type: 'clearFilter' });
   });
   return button;
@@ -685,8 +725,9 @@ function renderFilterBar(): void {
       state.view.search = searchInput.value;
       state.view.page = 0;
       persistViewState();
-      renderGrid();
-      renderStatus();
+      const pipeline = runPipeline(rowsInView(), state.snapshot!.columns, state.view);
+      renderGrid(pipeline);
+      renderStatus(pipeline);
     }, 150);
   });
   elements.filterBar.appendChild(el('span', { class: 'search-icon' }, [icon('search', 14)]));
@@ -707,12 +748,16 @@ function renderFilterBar(): void {
   builderButton.classList.toggle('is-active', state.view.filter.trim().length > 0);
   elements.filterBar.appendChild(builderButton);
 
-  const activeFilter = state.view.filter.trim();
-  if (activeFilter.length > 0) {
-    const chip = el('span', { class: 'filter-chip', title: `${t.activeFilter}: ${activeFilter}` }, [
+  // One chip per condition, so a single condition can be removed without losing
+  // the rest. A range stays one chip because the builder wraps it in parentheses.
+  const conditions = splitConditionParts(state.view.filter.trim());
+  for (const [index, condition] of conditions.entries()) {
+    const chip = el('span', { class: 'filter-chip', title: `${t.activeFilter}: ${condition}` }, [
       icon('filter', 12),
-      el('code', {}, [activeFilter]),
-      chipCloseButton(t.clearFilter)
+      el('code', {}, [condition]),
+      chipCloseButton(t.removeCondition, () =>
+        post({ type: 'applyFilter', text: joinConditionParts(conditions.filter((_, other) => other !== index)) })
+      )
     ]);
     elements.filterBar.appendChild(chip);
   }
@@ -745,7 +790,7 @@ function renderFilterBar(): void {
 }
 
 /** Renders the visible page of rows into the grid. */
-function renderGrid(): void {
+function renderGrid(shared?: PipelineOutcome): void {
   const snapshot = state.snapshot;
   const t = strings();
   if (!snapshot || !table) {
@@ -754,7 +799,7 @@ function renderGrid(): void {
   }
   clearEmpty();
 
-  const pipeline = runPipeline(snapshot.rows, snapshot.columns, state.view);
+  const pipeline = shared ?? runPipeline(rowsInView(), snapshot.columns, state.view);
   clampPage(state.view, pipeline.rows.length);
   const start = state.view.page * state.view.pageSize;
   const pageRows = pipeline.rows.slice(start, start + state.view.pageSize);
@@ -772,14 +817,14 @@ function renderGrid(): void {
   });
 }
 
-function renderStatus(): void {
+function renderStatus(shared?: PipelineOutcome): void {
   const t = strings();
   clear(elements.status);
   const snapshot = state.snapshot;
   if (!snapshot) {
     return;
   }
-  const pipeline = runPipeline(snapshot.rows, snapshot.columns, state.view);
+  const pipeline = shared ?? runPipeline(rowsInView(), snapshot.columns, state.view);
   const total = snapshot.totalItems ?? snapshot.rows.length;
   const start = state.view.page * state.view.pageSize;
   const shown = Math.min(state.view.pageSize, Math.max(0, pipeline.rows.length - start));
@@ -793,9 +838,7 @@ function renderStatus(): void {
   );
   if (state.filterInfo) {
     elements.status.appendChild(
-      el('span', { class: 'status-item' }, [
-        `${t.filtered}: ${state.filterInfo.location === 'debugger' ? 'debugger' : 'client'}`
-      ])
+      el('span', { class: 'status-item', title: state.filterInfo.executed }, [t.filtered])
     );
   }
   if (snapshot.truncated && total !== snapshot.rows.length) {
@@ -904,14 +947,14 @@ function renderValuePane(): void {
     valuePane.show([], undefined);
     return;
   }
-  const pipeline = runPipeline(snapshot.rows, snapshot.columns, state.view);
+  const pipeline = runPipeline(rowsInView(), snapshot.columns, state.view);
   const start = state.view.page * state.view.pageSize;
   const row = pipeline.rows[start + state.selectedRow];
   valuePane.show(snapshot.columns, row);
   valuePane.focus(snapshot.columns, state.selectedColumnKey);
 }
 
-function renderChart(): void {
+function renderChart(shared?: PipelineOutcome): void {
   elements.chartHost.hidden = !state.chartOpen || !state.settings.enableCharts;
   const snapshot = state.snapshot;
   if (!state.chartOpen || !snapshot || !chartView) {
@@ -947,7 +990,7 @@ function renderChart(): void {
       histogram: 'Histogram Chart'
     }
   };
-  const pipeline = runPipeline(snapshot.rows, snapshot.columns, state.view);
+  const pipeline = shared ?? runPipeline(rowsInView(), snapshot.columns, state.view);
   chartView.render({
     state: state.chart,
     columns: snapshot.columns,
@@ -1078,7 +1121,7 @@ function openColumnFilterPopover(column: ColumnDescriptor, anchor: HTMLElement):
   );
 
   const index = snapshot.columns.findIndex((candidate) => candidate.key === column.key);
-  const values = distinctValues(snapshot.rows, index, 1000);
+  const values = distinctValues(rowsInView(), index, 1000);
   const valueSearch = el('input', {
     class: 'popover-input popover-search',
     type: 'text',
@@ -1172,7 +1215,7 @@ function openColumnFilterPopover(column: ColumnDescriptor, anchor: HTMLElement):
   openPopover(anchor, content, 248);
 }
 
-/** Opens the whole collection filter builder next to the button that owns it. */
+/** Opens the condition builder next to the button that owns it. */
 function openFilterBuilder(anchor: HTMLElement): void {
   const snapshot = state.snapshot;
   if (!snapshot) {
@@ -1187,17 +1230,11 @@ function openFilterBuilder(anchor: HTMLElement): void {
     operator: t.filterOperator,
     value: t.filterValue,
     valueTo: t.filterValueTo,
-    matchAll: t.matchAll,
-    matchAny: t.matchAny,
     apply: t.apply,
     clear: t.clear,
     cancel: t.cancel,
     wholeCollection: t.filterWholeCollection,
-    partialHint: state.filterInfo
-      ? state.filterInfo.location === 'debugger'
-        ? ''
-        : state.filterInfo.warnings[0] ?? ''
-      : '',
+    partialHint: state.filterInfo?.warnings[0] ?? '',
     operators: t.filterOperators as FilterBuilderStrings['operators']
   };
 
@@ -1210,11 +1247,9 @@ function openFilterBuilder(anchor: HTMLElement): void {
     closePopovers,
     callbacks: {
       onApply: (text) => {
-        state.view.filter = text;
-        state.view.page = 0;
-        persistViewState();
+        // The chip and the rows arrive together with the result, so the viewer
+        // is rendered once instead of twice.
         post({ type: 'applyFilter', text });
-        renderAll();
       }
     }
   });
@@ -1304,7 +1339,7 @@ function openExportMenu(anchor: HTMLElement): void {
       const count = state.snapshot
         ? Math.min(
             state.view.pageSize,
-            runPipeline(state.snapshot.rows, state.snapshot.columns, state.view).rows
+            runPipeline(rowsInView(), state.snapshot.columns, state.view).rows
               .length -
               state.view.page * state.view.pageSize
           )
@@ -1396,7 +1431,7 @@ async function runCommand(command: string): Promise<void> {
       if (!state.snapshot) {
         return;
       }
-      const pipeline = runPipeline(state.snapshot.rows, state.snapshot.columns, state.view);
+      const pipeline = runPipeline(rowsInView(), state.snapshot.columns, state.view);
       const columns = currentColumns();
       const lines = [columns.map((entry) => entry.column.title).join('\t')];
       for (const row of pipeline.rows) {

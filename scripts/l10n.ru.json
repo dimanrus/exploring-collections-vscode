@@ -63,7 +63,6 @@
   "Extension version": "Версия расширения",
   "Filter": "Фильтр",
   "Filter \"{0}\"": "Фильтр «{0}»",
-  "Filter the whole collection": "Фильтр по всей коллекции",
   "Filtered": "Отфильтровано",
   "Filtering…": "Фильтрация…",
   "First": "Первое",
@@ -84,8 +83,6 @@
   "Local filter: off": "Локальный фильтр: выкл",
   "Local filter: on": "Локальный фильтр: вкл",
   "Looking for collections in the current frame…": "Поиск коллекций в текущем кадре…",
-  "Match all": "Все условия",
-  "Match any": "Любое условие",
   "Max": "Максимум",
   "Mean": "Среднее",
   "Min": "Минимум",
@@ -150,7 +147,6 @@
   "Sum": "Сумма",
   "Supported": "Поддерживается",
   "The chart image could not be encoded.": "Не удалось закодировать изображение графика.",
-  "The condition is applied to every element, not only to the rows that were fetched.": "Условие применяется ко всем элементам, а не только к загруженным строкам.",
   "The data that was read from {0} is no longer there.": "Данные, прочитанные из {0}, больше не найдены.",
   "The debug session for this collection is no longer active.": "Сеанс отладки для этой коллекции больше не активен.",
   "The debug session has ended.": "Сессия отладки завершена.",
@@ -205,5 +201,7 @@
   "{0} copied to clipboard": "{0} скопировано в буфер обмена",
   "{0} row(s)": "строк: {0}",
   "{0} rows": "{0} строк",
-  "{0} of {1} rows": "{0} из {1} строк"
+  "{0} of {1} rows": "{0} из {1} строк",
+  "Filter rows with a condition": "Фильтр строк по условию",
+  "The condition is applied to every fetched row. When the collection did not fit the window, only that window can match.": "Условие применяется ко всем загруженным строкам. Если коллекция не поместилась в окно, совпадать могут только строки этого окна."
 }

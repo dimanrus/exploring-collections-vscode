@@ -1,4 +1,4 @@
-import type { CollectionSnapshot, FilterResult, ValueNode } from '../model/types';
+import type { CollectionSnapshot, RowDescriptor, ValueNode } from '../model/types';
 import type { ExportFormat } from '../export/textFormats';
 
 /** Per column local filter state (the funnel icon in the toolbar). */
@@ -14,6 +14,14 @@ export interface ColumnFilterState {
 }
 
 /** State of the table view, persisted per collection between sessions. */
+/** What the viewer learns about the last filter; the rows travel on their own. */
+export interface FilterSummary {
+  /** Text of the condition that ran, shown in the tooltip of the status badge. */
+  executed: string;
+  /** Non fatal problems, e.g. a window that was smaller than the collection. */
+  warnings: string[];
+}
+
 export interface ViewState {
   sort: { columnKey: string; direction: 'asc' | 'desc' } | null;
   search: string;
@@ -134,8 +142,6 @@ export interface LocalizedStrings {
     filterOperator: string;
     filterValue: string;
     filterValueTo: string;
-    matchAll: string;
-    matchAny: string;
     filterOperators: Record<string, string>;
     rowPosition: string;
     copyCell: string;
@@ -174,8 +180,14 @@ export type HostMessage =
       providerName: string;
     }
   | { type: 'snapshot'; snapshot: CollectionSnapshot; providerName: string }
-  | { type: 'filterResult'; snapshot: CollectionSnapshot; filter: FilterResult }
-  | { type: 'filterApplied'; text: string }
+  | {
+      type: 'filterResult';
+      /** Condition that produced `rows`, kept for the chip and saved with the view. */
+      text: string;
+      rows: RowDescriptor[];
+      filter: FilterSummary;
+    }
+  | { type: 'filterCleared' }
   | { type: 'busy'; busy: boolean; message?: string }
   | { type: 'error'; message: string }
   | { type: 'toast'; level: 'info' | 'warn' | 'error'; message: string }

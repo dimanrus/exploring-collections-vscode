@@ -130,7 +130,6 @@ export async function buildDiagnosticsReport(deps: DiagnosticsDependencies): Pro
         ['maxDepth', String(settings.maxDepth)],
         ['fetchConcurrency', String(settings.fetchConcurrency)],
         ['timeoutMs', String(settings.timeoutMs)],
-        ['enableFilterPushdown', String(settings.enableFilterPushdown)],
         ['enableCharts', String(settings.enableCharts)],
         ['dateFormat', settings.dateFormat],
         ['columnOrder', settings.columnOrder],

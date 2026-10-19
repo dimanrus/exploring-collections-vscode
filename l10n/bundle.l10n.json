@@ -815,14 +815,14 @@
       "src/services/i18n.ts"
     ]
   },
-  "Filter the whole collection": {
-    "message": "Filter the whole collection",
+  "Filter rows with a condition": {
+    "message": "Filter rows with a condition",
     "comment": [
       "src/services/i18n.ts"
     ]
   },
-  "The condition is applied to every element, not only to the rows that were fetched.": {
-    "message": "The condition is applied to every element, not only to the rows that were fetched.",
+  "The condition is applied to every fetched row. When the collection did not fit the window, only that window can match.": {
+    "message": "The condition is applied to every fetched row. When the collection did not fit the window, only that window can match.",
     "comment": [
       "src/services/i18n.ts"
     ]
@@ -853,18 +853,6 @@
   },
   "to": {
     "message": "to",
-    "comment": [
-      "src/services/i18n.ts"
-    ]
-  },
-  "Match all": {
-    "message": "Match all",
-    "comment": [
-      "src/services/i18n.ts"
-    ]
-  },
-  "Match any": {
-    "message": "Match any",
     "comment": [
       "src/services/i18n.ts"
     ]

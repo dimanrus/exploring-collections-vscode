@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 import {
   collectFreeIdentifiers,
   formatExpression,
+  joinConditionParts,
   parseFilter,
+  splitConditionParts,
   tokenize
 } from '../src/filter/expression';
 import {
@@ -15,8 +17,6 @@ import {
   matchRow,
   unresolvedIdentifiers
 } from '../src/filter/evaluator';
-import { emitBody } from '../src/filter/emit';
-import { CSHARP_DIALECT, FSHARP_DIALECT, JAVASCRIPT_DIALECT } from '../src/filter/dialects';
 import type { ColumnDescriptor, RowDescriptor } from '../src/model/types';
 
 function columns(...specs: Array<[string, ColumnDescriptor['kind']]>): ColumnDescriptor[] {
@@ -209,51 +209,47 @@ describe('filter evaluation', () => {
   });
 });
 
-describe('filter emission for pushdown', () => {
-  const emit = (text: string, dialect = CSHARP_DIALECT) => {
-    const parsed = parseFilter(text);
-    const body = parsed.expression.kind === 'lambda' ? parsed.expression.body : parsed.expression;
-    return emitBody(body, { sourceParameter: parsed.parameter ?? 'x', targetParameter: 'x', dialect });
-  };
-
-  it('emits C# operators and collection helpers', () => {
-    const result = emit('x => x.City == "Seoul" && len(x.City) > 2');
-    assert.equal(result.text, '(x.City == "Seoul") && (System.Linq.Enumerable.Count(x.City) > 2)');
-    assert.equal(result.exact, true);
+describe('splitting a condition into chips', () => {
+  it('splits top level conjunctions', () => {
+    assert.deepEqual(
+      splitConditionParts('contains(x.City, "Seoul") && x.DegreeCelsius >= 20'),
+      ['contains(x.City, "Seoul")', 'x.DegreeCelsius >= 20']
+    );
   });
 
-  it('does not corrupt string literals that contain operator characters', () => {
-    const result = emit('x => x.Feels == "a==b"');
-    assert.equal(result.text, 'x.Feels == "a==b"');
+  it('keeps a parenthesised range as one part', () => {
+    assert.deepEqual(
+      splitConditionParts('x.City == "Seoul" && (x.DegreeCelsius >= 10 && x.DegreeCelsius <= 30)'),
+      ['x.City == "Seoul"', '(x.DegreeCelsius >= 10 && x.DegreeCelsius <= 30)']
+    );
   });
 
-  it('emits F# equality operators', () => {
-    const result = emit('x => x.City == "Seoul" && x.DegreeCelsius != 0', FSHARP_DIALECT);
-    assert.equal(result.text, '(x.City = "Seoul") && (x.DegreeCelsius <> 0)');
-    assert.equal(result.exact, true);
+  it('does not split on a && inside a string literal', () => {
+    assert.deepEqual(splitConditionParts('x.Name == "a && b" && x.Active == true'), [
+      'x.Name == "a && b"',
+      'x.Active == true'
+    ]);
+    assert.deepEqual(splitConditionParts('x.Name == "a \\" && b"'), ['x.Name == "a \\" && b"']);
   });
 
-  it('emits JavaScript strict equality and method names', () => {
-    const result = emit('x => x.City.Contains("Se") && x.Feels == "warm"', JAVASCRIPT_DIALECT);
-    assert.equal(result.text, 'x.City.includes("Se") && (x.Feels === "warm")');
-    assert.equal(result.exact, true);
+  it('keeps an OR condition whole, because it is one condition', () => {
+    assert.deepEqual(splitConditionParts('x.City == "a" || x.City == "b"'), [
+      'x.City == "a" || x.City == "b"'
+    ]);
   });
 
-  it('marks unsupported operators as inexact instead of guessing', () => {
-    const result = emit('x => like(x.City, "S%")');
-    assert.equal(result.exact, false);
-    assert.match(result.notes.join(' '), /client/);
+  it('ignores empty input and rebuilds what it split', () => {
+    assert.deepEqual(splitConditionParts('   '), []);
+    const parts = splitConditionParts('x.A == 1 && x.B == 2');
+    assert.equal(joinConditionParts(parts), 'x.A == 1 && x.B == 2');
+    assert.equal(joinConditionParts([]), '');
+    assert.equal(joinConditionParts(['x.A == 1', '  ']), 'x.A == 1');
   });
 
-  it('renames the lambda parameter to the target name', () => {
-    const parsed = parseFilter('it => it.City == "Seoul"');
-    const body = parsed.expression.kind === 'lambda' ? parsed.expression.body : parsed.expression;
-    const result = emitBody(body, {
-      sourceParameter: 'it',
-      targetParameter: 'x',
-      dialect: JAVASCRIPT_DIALECT
-    });
-    assert.equal(result.text, 'x.City === "Seoul"');
+  it('round trips through the builder text', () => {
+    const parts = splitConditionParts('contains(x.City, "Seo") && (x.Degree >= 10 && x.Degree <= 30)');
+    assert.equal(parts.length, 2);
+    assert.equal(joinConditionParts(parts.filter((_, index) => index !== 0)), '(x.Degree >= 10 && x.Degree <= 30)');
   });
 });
 

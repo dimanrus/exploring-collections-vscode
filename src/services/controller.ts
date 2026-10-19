@@ -241,7 +241,6 @@ export class CollectionController {
       },
       helperOptions: this.sessions.helperOptions(context.provider),
       helperState: context.helperState,
-      enablePushdown: context.settings.enableFilterPushdown,
       layout: layoutFromSettings(context.settings),
       logger: this.logger
     });

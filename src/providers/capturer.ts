@@ -4,12 +4,11 @@ import type {
   CollectionSnapshot,
   ColumnDescriptor,
   FilterResult,
-  RetrievalStrategy,
-  RowDescriptor
+  RetrievalStrategy
 } from '../model/types';
 import type { FormatOptions } from '../model/formatter';
 import { analyzeAdapterText, parseAdapterPrimitive } from '../model/formatter';
-import { buildSnapshot, rowsFromElements, withRows, type ElementNode } from '../model/snapshotBuilder';
+import { buildSnapshot, withRows, type ElementNode } from '../model/snapshotBuilder';
 import { applyFilter, unresolvedIdentifiers } from '../filter/evaluator';
 import { collectFreeIdentifiers, formatExpression, parseFilter, type ParsedFilter } from '../filter/expression';
 import { isCutPayload, totalFromPayload } from './jsonPayload';
@@ -423,7 +422,6 @@ export interface FilterRequest {
   formatOptions: FormatOptions;
   helperOptions: HelperOptions;
   helperState: SessionHelperState;
-  enablePushdown: boolean;
   layout: CaptureLayout;
   logger: Logger;
 }
@@ -436,96 +434,38 @@ export interface FilterOutcome {
 /**
  * Applies a filter to a snapshot.
  *
- * The filter always runs on the client so the behaviour is identical in every
- * language. When the collection is larger than the fetched window and the
- * provider can translate the filter exactly, the filter is additionally pushed
- * down to the debugger so that matching elements outside the window are found.
+ * The condition runs locally, over the rows that were captured, so applying a
+ * filter costs no debugger requests and cannot block the debuggee. When the
+ * collection was cut to the window the result says so, because the rows that
+ * were never fetched cannot match.
  */
 export async function filterCollection(request: FilterRequest): Promise<FilterOutcome> {
-  const { snapshot, provider, options, helperOptions } = request;
+  const { snapshot } = request;
   if (request.filterText.trim().length === 0) {
     return {
       snapshot,
-      result: { rows: snapshot.rows, executed: '', location: 'client', warnings: [] }
+      result: { rows: snapshot.rows, executed: '', warnings: [] }
     };
   }
   const parsed = parseFilter(request.filterText);
-  const dapOptions = { timeoutMs: options.timeoutMs, token: options.token };
 
+  // Free identifiers of the condition are read from the frame once, so a
+  // condition such as `x => x.Price > budget` works without the caller passing
+  // the value.
   const locals = await resolveLocals(request, parsed);
-  const localRows = applyFilter(parsed, snapshot.rows, snapshot.columns, locals);
-
-  const fetchedAll = snapshot.totalItems === null || snapshot.totalItems <= snapshot.rows.length;
+  const rows = applyFilter(parsed, snapshot.rows, snapshot.columns, locals);
+  const executed = formatExpression(parsed.expression, parsed.parameter ?? 'x');
   const warnings: string[] = [];
-  let executed = formatExpression(parsed.expression, parsed.parameter ?? 'x');
-  let location: FilterResult['location'] = 'client';
-  let rows: RowDescriptor[] = localRows;
-
-  const canPushDown =
-    request.enablePushdown &&
-    !fetchedAll &&
-    provider.buildFilterExpression !== undefined &&
-    provider.parseSerializedPayload !== undefined;
-
-  if (canPushDown) {
-    const translation = provider.buildFilterExpression?.(
-      snapshot.expression,
-      {
-        body: parsed.expression.kind === 'lambda' ? parsed.expression.body : parsed.expression,
-        parameter: parsed.parameter ?? 'x',
-        canonical: executed
-      },
-      helperOptions
-    );
-
-    if (!translation) {
-      warnings.push('This provider cannot push filters down; only the fetched rows were filtered.');
-    } else if (!translation.exact) {
-      warnings.push(
-        `The filter could not be translated exactly for ${provider.displayName} (${translation.notes.join('; ') || 'unsupported construct'}); only the fetched rows were filtered.`
-      );
-    } else {
-      const outcome = await request.client.tryEvaluate(
-        translation.expression,
-        request.frameId,
-        'watch',
-        dapOptions
-      );
-      if (!outcome.ok) {
-        warnings.push(`Pushdown failed: ${formatError(outcome.error)}. Only the fetched rows were filtered.`);
-      } else {
-        const elements = provider.parseSerializedPayload?.(outcome.value.result);
-        if (!elements) {
-          warnings.push('Pushdown returned a payload that could not be parsed; only the fetched rows were filtered.');
-        } else {
-          const pushedRows = rowsFromElements(
-            elements,
-            snapshot.columns,
-            request.formatOptions,
-            request.layout.flattenDepth
-          );
-          // Re-apply the filter locally as a safety net against over-inclusion.
-          rows = applyFilter(parsed, pushedRows, snapshot.columns, locals);
-          executed = translation.expression;
-          location = 'debugger';
-          warnings.push(...translation.notes);
-        }
-      }
-    }
-  } else if (!fetchedAll) {
+  const total = snapshot.totalItems;
+  if (total !== null && total > snapshot.rows.length) {
     warnings.push(
-      'The collection is larger than the fetched window, so only the fetched rows could be filtered.'
+      `Only the ${snapshot.rows.length.toLocaleString()} fetched rows were filtered, of ${total.toLocaleString()} in the collection. Increase "Rows" to fetch more of it.`
     );
   }
 
   return {
     snapshot: withRows(snapshot, rows),
-    result: {
-      rows,
-      executed,
-      location,
-      warnings
-    }
+    result: { rows, executed, warnings }
   };
 }
 

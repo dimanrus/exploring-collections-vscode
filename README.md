@@ -10,7 +10,7 @@ Sort it, search it, filter it, chart it, export it — while your program sits a
 
 [![VS Code](https://img.shields.io/badge/VS%20Code-%E2%89%A5%201.105-007ACC?logo=visualstudiocode&logoColor=white)](https://code.visualstudio.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Languages](https://img.shields.io/badge/languages-9-blueviolet)](#-supported-languages)
+[![Languages](https://img.shields.io/badge/languages-4-blueviolet)](#-supported-languages)
 [![Charts](https://img.shields.io/badge/charts-9-ff69b4)](#-charts)
 
 *English · [Русский](./README.ru.md)*
@@ -57,13 +57,13 @@ The parser understands the literal syntax of the supported languages — JavaScr
 
 Four languages, two capture strategies: **.NET is read only through the bundled helper** (one debugger request, whole page in one go), and **JavaScript/TypeScript is read from adapter previews**, falling back to the universal variables walk when an adapter hides the previews.
 
-| Language | Adapters | Fast path | Native helper | Filter pushdown |
-| --- | --- | --- | --- | --- |
-| **C#** | `coreclr`, `clr`, `vsdbg`, `dotnet` | helper file (1 request) | ✅ required — `ExploringCollections.Helper.dll` (also enables ADO.NET) | ✅ `.Where` |
-| **F#** | `coreclr`, `clr`, `vsdbg`, `dotnet` | helper file (1 request) | ✅ required — same helper, option/union aware | ✅ `Seq.filter` |
-| **JavaScript / TypeScript** | `pwa-node`, `node`, `pwa-chrome`, `chrome`, `msedge`, `pwa-msedge`, `deno`, `bun` | adapter previews (1–2 requests) | built in | ✅ `Array.filter` |
+| Language | Adapters | Fast path | Native helper |
+| --- | --- | --- | --- |
+| **C#** | `coreclr`, `clr`, `vsdbg`, `dotnet` | helper file (1 request) | ✅ required — `ExploringCollections.Helper.dll` (also enables ADO.NET) |
+| **F#** | `coreclr`, `clr`, `vsdbg`, `dotnet` | helper file (1 request) | ✅ required — same helper, option/union aware |
+| **JavaScript / TypeScript** | `pwa-node`, `node`, `pwa-chrome`, `chrome`, `msedge`, `pwa-msedge`, `deno`, `bun` | adapter previews (1–2 requests) | built in |
 
-✅ = bundled and used automatically · ➖ = filtered locally
+✅ = bundled and used automatically
 
 Column kinds (`number`, `string`, `boolean`, `date`, `null`, `object`, …) are inferred per language, so sorting and chart axes behave correctly in all of them.
 
@@ -81,7 +81,7 @@ Column kinds (`number`, `string`, `boolean`, `date`, `null`, `object`, …) are 
 | 🔍 **Explore CodeLens** | An `Explore collection` lens above **the line that introduced each collection** — not above the breakpoint — with its element count, refreshed on every stop and step. When the identifier belongs to another file (a field, a generated member) the lens moves to the enclosing declaration instead of piling up on the stop line, and **Show Diagnostics** reports the exact line and reason for every lens |
 | 🧪 **Design time preview** | A `Preview data` lens above collection literals, so hardcoded data can be inspected without a debug session — see [below](#-no-breakpoint-no-problem) |
 | 🎯 **Local filters** | A funnel in every column header opens a per-column popup with a compact value box, an inline `/.*/ ` switch for regular expressions, `include`/`exclude` mode and the list of known values; `Clear all filters` removes every condition at once |
-| 🧠 **Whole collection filters** | The `Filter the whole collection` button next to the search builds a condition per column (contains, does not contain, equals, is not, starts with, ends with, matches the regular expression, greater/less/between, is null/empty/true/false) with a live expression preview. The condition is pushed into the debuggee for C#/F#/JavaScript/TypeScript, so it reaches elements outside the fetched window, and it stays visible as a removable chip |
+| 🧠 **Condition builder** | The `Filter rows with a condition` button next to the search builds a condition per column (contains, does not contain, equals, is not, starts with, ends with, matches the regular expression, greater/less/between, is null/empty/true/false) with a live expression preview. The condition runs over the captured rows, needs no debugger request and stays visible as a removable chip |
 | 🌳 **Value pane** | Click `#` for the whole element, or any cell for that member only; nested members load lazily from the debugger |
 | 📈 **Charts** | 9 chart types with series settings and PNG export |
 | 💾 **Export** | CSV, JSON, Excel (`.xlsx`) and XML — containing the filtered and sorted view you are looking at |
@@ -91,7 +91,7 @@ Column kinds (`number`, `string`, `boolean`, `date`, `null`, `object`, …) are 
 
 ### 🔗 Locals in your filter
 
-The **Filter the whole collection** button next to the search collects the condition from per-column rows, pushes it into the debuggee when the translation is exact and keeps it visible as a chip with a clear button. Free identifiers that are **not** columns are resolved in the current frame, just like a query parameter:
+The **Filter rows with a condition** button next to the search collects the condition from per-column rows and keeps it visible as a chip with a clear button. The condition is evaluated locally over the rows that were captured, so applying it costs no debugger request and cannot block the debuggee. Free identifiers that are **not** columns are resolved in the current frame, just like a query parameter:
 
 ```text
 x.Day == dayOfMonth        ← dayOfMonth is a local of the stopped statement
@@ -158,7 +158,6 @@ Every helper speaks the same tiny envelope, so the extension needs one parser pe
 | `exploringCollections.maxDepth` | `3` | How deep nested members are flattened into columns |
 | `exploringCollections.fetchConcurrency` | `8` | Parallel debug adapter requests while walking |
 | `exploringCollections.timeoutMs` | `20000` | Per request timeout |
-| `exploringCollections.enableFilterPushdown` | `true` | Push exactly translatable filters into the debuggee |
 | `exploringCollections.enableCharts` | `true` | Show the chart tab |
 | `exploringCollections.showInlineHints` | `true` | Inline `🔍 name (count)` hint on the stopped line |
 | `exploringCollections.showCodeLens` | `true` | `Explore collection` CodeLens above every collection in scope at the breakpoint |
@@ -218,7 +217,7 @@ To add a language: copy `l10n/bundle.l10n.ru.json` to `l10n/bundle.l10n.<tag>.js
   │ 2. variables walk     │   JS/TS fallback when previews are hidden
   └───────────────────────┘
             │
-            ▼  language providers (syntax, kinds, filter dialects)
+            ▼  language providers (syntax, column kinds)
   ┌───────────────────────┐
   │ snapshot + rows model │   immutable, serializable, exportable
   └───────────────────────┘
@@ -250,7 +249,7 @@ npm test                 # unit tests + the .NET helper suite
 npm run test:helpers     # helper suites only (skips toolchains you don't have)
 npm run test:integration # drives the extension inside a real VS Code window
 npm run preview          # renders the viewer into media/screenshot-*.png
-npm run package          # produce exploring-collections-1.0.0.vsix
+npm run package          # produce exploring-collections-1.1.0.vsix
 ```
 
 Helper build steps: `npm run package` packs the .NET helper assembly
