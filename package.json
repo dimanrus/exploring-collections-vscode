@@ -2,7 +2,7 @@
   "name": "exploring-collections",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "publisher": "dimanrus",
   "license": "MIT",
   "author": {

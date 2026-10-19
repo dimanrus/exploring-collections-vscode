@@ -17,6 +17,14 @@ Sort it, search it, filter it, chart it, export it — while your program sits a
 
 </div>
 
+<div align="center">
+
+<img src="./docs/screenshots/overview.png" alt="The collection viewer: a filtered list of 100 000 employees, an area chart above the grid and the details of the selected row" width="100%" />
+
+<sub>100 000 <code>List&lt;Employee&gt;</code> elements · condition <code>x.Age &gt; 20</code> · area chart · row details · the status bar reports the retrieval strategy, the request count and the capture time</sub>
+
+</div>
+
 ---
 
 ## 🚀 Quick start
@@ -34,8 +42,6 @@ Sort it, search it, filter it, chart it, export it — while your program sits a
 | `🧭 Activity bar → Exploring Collections` | All captured snapshots, pinned or transient |
 | `💡 Inline hint` | On the stopped line: `🔍 temperatures (14) · explore with Ctrl+Alt+E` |
 | `🧪 Preview data` | CodeLens above a collection literal in the editor — **no debug session needed** |
-
-> **Note** — Visual Studio Code offers no *debug hover* extension point, so unlike the visualizers built into other IDEs there is no `Explore` hyperlink in a tooltip. The CodeLens above each collection, the extra hover section, the context menus, the keybinding, the inline hint and the snapshot tree cover the same workflow inside the APIs VS Code exposes today.
 
 ### 🧪 No breakpoint? No problem
 
@@ -232,6 +238,7 @@ webview/        the UI (vanilla TypeScript, self contained SVG charts)
 helpers/        per language helper libraries with their own test suites
 test/           unit + integration tests (node:test over the bundled output)
 resources/      icon and activity bar artwork
+docs/           README screenshots (they ship with the VSIX so the Marketplace can show them)
 scripts/        icon generation, l10n generation, helper test runner
 ```
 
@@ -249,7 +256,7 @@ npm test                 # unit tests + the .NET helper suite
 npm run test:helpers     # helper suites only (skips toolchains you don't have)
 npm run test:integration # drives the extension inside a real VS Code window
 npm run preview          # renders the viewer into media/screenshot-*.png
-npm run package          # produce exploring-collections-1.1.0.vsix
+npm run package          # produce exploring-collections-1.0.0.vsix
 ```
 
 Helper build steps: `npm run package` packs the .NET helper assembly

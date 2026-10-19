@@ -313,7 +313,7 @@ describe('capture through a serializer (fast path)', () => {
       weatherTree(),
       (expression) =>
         expression.startsWith('System.Reflection.Assembly.LoadFrom')
-          ? { ok: true, result: '{ExploringCollections.Helper, Version=1.1.0.0}' }
+          ? { ok: true, result: '{ExploringCollections.Helper, Version=1.0.0.0}' }
           : undefined,
       { file: (start, count) => weatherPayload(start, count) }
     );
